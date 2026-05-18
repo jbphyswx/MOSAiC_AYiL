@@ -1,0 +1,161 @@
+&run
+    iexpnr = 1
+    lwarmstart = .false.
+    startfile = 'initd002h00mx000y000.001'
+    runtime = 7200
+    trestart = 1800
+    ladaptive = .true.
+    irandom = 43
+    randthl = 0.1
+    randqt = 2.5e-05
+    nsv = 12
+/
+
+&domain
+    itot = 320
+    jtot = 320
+    kmax = 286
+    xsize = 6400
+    ysize = 6400
+    xlat = 78.41
+    xlon = 8.47
+    xday = 23
+    xtime = 0.0
+/
+
+&physics
+    ps = 100805.48
+    thls = 278.61
+    lmoist = .true.
+    iradiation = 1
+    rad_ls = .false.
+    lcoriol = .true.
+    lpressgrad = .true.
+    lmomsubs = .false.
+    ltimedep = .true.
+    ltimedepsv = .false.
+/
+
+&namradiation
+    lcnstzenithtime = .true.
+    cnstzenithtime = 11
+    emissurf = 0.985
+    l_radfullice = .true.
+    l_nc_const = .true.
+    l_nci_const = .false.
+    l_pre_const = .false.
+    l_pde_const = .false.
+/
+
+&namsurface
+    isurf = 2
+    lmostlocal = .false.
+    lsmoothflux = .false.
+    z0mav = 0.0008
+    z0hav = 0.00085
+    albedoav = 0.06
+    l_surficefrac = .true.
+    seaicefrct = 0.1
+    larcticstab = .true.
+/
+
+&dynamics
+    llsadv = .false.
+    cu = 0.0
+    cv = 0.0
+    iadv_mom = 5
+    iadv_tke = 77
+    iadv_thl = 77
+    iadv_qt = 77
+    iadv_sv = 77
+/
+
+&namtestbed
+    ltestbed = .true.
+    ltb_nudge = .true.
+    tb_taunudge = 10800.0
+    tb_zminnudge = -1
+    tb_zmidnudge = 300
+    ltb_loadsv = .false.
+    ltb_latestart = .true.
+/
+
+&nammicrophysics
+    imicro = 11
+/
+
+&nambulk3
+    n_i_max = 200
+    tlimhetfreeze = 258.15
+    nc0 = 10000000.0
+    l_setccn = .false.
+    n_clmax = 500000000.0
+/
+
+&nambulkmicrostat
+    lmicrostat = .true.
+    timeav = 1800
+    dtav = 60
+/
+
+&nambulk3stat
+    l_bulk3stat = .true.
+/
+
+&namchecksim
+    tcheck = 0
+/
+
+&namsampling
+    lsampcl = .true.
+    lsampco = .true.
+    lsampup = .true.
+    lsamptend = .true.
+    dtav = 60
+    timeav = 1800
+/
+
+&namtimestat
+    ltimestat = .true.
+    dtav = 60
+/
+
+&namcrosssection
+    lcross = .true.
+    dtav = 1800
+/
+
+&namgenstat
+    lstat = .true.
+    dtav = 60
+    timeav = 300
+/
+
+&namradstat
+    lstat = .true.
+    dtav = 60
+    timeav = 1800
+/
+
+&namnetcdfstats
+    lsync = .true.
+/
+
+&namfielddump
+    lfielddump = .true.
+    dtav = 1800
+    lbinary = .false.
+    khigh = 200
+/
+
+&namstattend
+    dtav = 60
+    timeav = 300
+    ltend = .true.
+/
+
+&namcloudfield
+    dtav = 60
+    lcloudfield = .false.
+    laddinfo = .true.
+/

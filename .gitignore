@@ -1,0 +1,24 @@
+# Ignore Simulation Outputs
+*.nc
+*.001
+
+*.in
+*.out
+*.log
+
+*.png
+*.hdf5
+*.h5
+*.g
+*.lock
+*.loc
+*.dat
+*.pdf
+
+# misc
+.DS_Store
+.qodo
+AGENTS.md
+MEMORY.md
+.agents
+.claude/worktrees/
