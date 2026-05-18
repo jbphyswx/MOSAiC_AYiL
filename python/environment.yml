@@ -1,0 +1,15 @@
+# MOSAiC_AYIL Python stack (conda-forge only).
+# Create/update: conda env update -n MOSAiC_AYIL -f python/environment.yml
+name: MOSAiC_AYIL
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python>=3.11
+  - xarray
+  - netcdf4
+  - zarr
+  - numcodecs
+  - numpy
+  - pytest
+  - pip  # conda meta-package only; do not pip-install deps

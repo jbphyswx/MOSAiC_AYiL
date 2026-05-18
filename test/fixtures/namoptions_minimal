@@ -1,0 +1,7 @@
+&run
+    runtime = 100
+/
+&namfielddump
+    dtav = 50
+    khigh = 10
+/

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# NetCDF include-path helper for DALES CMake.
+# Override: export NETCDF_INCLUDE=/path/to/include
+set -euo pipefail
+
+if [[ -n "${NETCDF_INCLUDE:-}" ]]; then
+  echo "${NETCDF_INCLUDE}"
+  exit 0
+fi
+
+if command -v nf-config >/dev/null 2>&1; then
+  inc="$(nf-config --includedir 2>/dev/null || true)"
+  if [[ -n "${inc}" && -d "${inc}" ]]; then
+    echo "${inc}"
+    exit 0
+  fi
+fi
+
+if command -v pkg-config >/dev/null 2>&1; then
+  inc="$(pkg-config --variable=includedir netcdf-fortran 2>/dev/null || true)"
+  if [[ -n "${inc}" && -d "${inc}" ]]; then
+    echo "${inc}"
+    exit 0
+  fi
+fi
+
+for inc in /usr/include /usr/local/include "${NETCDF_ROOT:-}/include"; do
+  if [[ -f "${inc}/netcdf.mod" || -f "${inc}/NETCDF.mod" ]]; then
+    echo "${inc}"
+    exit 0
+  fi
+done
+
+echo "ERROR: set NETCDF_INCLUDE to your NetCDF Fortran include directory" >&2
+exit 1

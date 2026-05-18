@@ -1,0 +1,2 @@
+Time of Day: 100000.000    Time of Simulation:      98.00    dt:  1.000000000
+Time of Day: 100100.000    Time of Simulation:     100.00    dt:  2.000000000
