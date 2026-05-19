@@ -1,5 +1,8 @@
 # Pipeline artifacts (see scripts/clean.sh)
-runs/
+# local directory version and symlink version
+runs/ 
+runs 
+
 dales_ayil/build/
 test/tmp_runs/
 
