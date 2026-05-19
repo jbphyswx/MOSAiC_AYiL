@@ -12,6 +12,8 @@ scripts/env.local
 *.001
 
 *.in
+!dales_ayil/src/modversion.f90.in
+!dales_ayil/config/modversion.f90.in
 *.out
 *.log
 
@@ -23,6 +25,15 @@ scripts/env.local
 *.loc
 *.dat
 *.pdf
+
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # misc
 .DS_Store

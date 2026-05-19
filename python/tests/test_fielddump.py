@@ -26,8 +26,17 @@ def test_merge_fielddump(synthetic_run_dir: Path) -> None:
 
 def test_merge_includes_staggered(synthetic_run_dir: Path) -> None:
     ds = merge_fielddump(synthetic_run_dir, include_staggered=True)
-    staggered = [v for v in ds.data_vars if v.startswith("u_tile_")]
-    assert len(staggered) == 4
+    assert "u" in ds and "v" in ds and "w" in ds
+    assert not any(v.startswith("u_tile_") for v in ds.data_vars)
+    assert ds.sizes["y"] == 6
+    assert ds.sizes["xu"] == 6
+    assert ds.sizes["yv"] == 6
+
+
+def test_scalar_renamed(synthetic_run_dir: Path) -> None:
+    ds = merge_fielddump(synthetic_run_dir, include_staggered=False)
+    assert "n_rain" in ds
+    assert "sv001" not in ds
 
 
 def test_missing_tiles_raises(tmp_path: Path) -> None:

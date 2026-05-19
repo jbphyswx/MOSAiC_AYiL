@@ -38,10 +38,12 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
   ```
 - **Run tools:**
   ```bash
-  ./scripts/convert_to_zarr.sh runs/20200720
+  cd python && conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720
+  # or: ./scripts/convert_to_zarr.sh runs/20200720  (conda wrapper only)
   cd python && conda run -n MOSAiC_AYIL pytest -v
   ```
-- **Zarr format:** writes **Zarr v2** (`ZARR_FORMAT = 2` in `zarr_store.py`) for `numcodecs` / Blosc compatibility with xarray.
+- **Zarr conversion logic lives in Python** (`ayil.convert`, `ayil.paths`, `ayil.fielddump`). Do not add path-resolution or progress logic to bash.
+- **Zarr format:** writes **Zarr v3** via `write_dataset_zarr(..., zarr_format=3)` (default); Blosc via `zarr.codecs.BloscCodec`; consolidated metadata on by default (`consolidated=True`). Merged winds (`u`, `v`, `w`) and physical microphysics names — no `u_tile_*` or raw `sv00N` in output.
 
 ## Site configuration
 

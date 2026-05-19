@@ -28,4 +28,15 @@ if [[ ! -f cases/standard/moduser.f90 ]]; then
   cp -f src/moduser.f90 cases/standard/moduser.f90
 fi
 
+# CMake git-version.cmake needs this template (Zenodo zip often omits it; *.in was gitignored).
+if [[ ! -f src/modversion.f90.in ]]; then
+  if [[ -f config/modversion.f90.in ]]; then
+    echo "Creating src/modversion.f90.in from config/modversion.f90.in"
+    cp -f config/modversion.f90.in src/modversion.f90.in
+  else
+    echo "ERROR: missing src/modversion.f90.in and config/modversion.f90.in" >&2
+    exit 1
+  fi
+fi
+
 echo "Build tree OK under ${DALES_SRC}"

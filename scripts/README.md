@@ -167,7 +167,7 @@ Zenodo ships only `src/` and `config/`. This repo also commits:
 - `findnetcdf` — NetCDF include helper for CMake
 - `cases/standard/moduser.f90` — required by CMake case logic
 
-`bootstrap_build_tree.sh` recreates any of these if missing.
+`bootstrap_build_tree.sh` recreates any of these if missing, including `src/modversion.f90.in` (required by CMake; omitted from some Zenodo trees and previously gitignored via `*.in`).
 
 ## Clean rebuild
 

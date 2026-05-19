@@ -36,6 +36,9 @@ def _write_tile(
             "ql": (("time", "zt", "yt", "xt"), np.random.randn(nt, nz, ny, nx).astype("f4")),
             "thl": (("time", "zt", "yt", "xt"), np.random.randn(nt, nz, ny, nx).astype("f4")),
             "u": (("time", "zt", "yt", "xm"), np.random.randn(nt, nz, ny, nx).astype("f4")),
+            "v": (("time", "zt", "ym", "xt"), np.random.randn(nt, nz, ny, nx).astype("f4")),
+            "w": (("time", "zm", "yt", "xt"), np.random.randn(nt, nz, ny, nx).astype("f4")),
+            "sv001": (("time", "zt", "yt", "xt"), np.random.randn(nt, nz, ny, nx).astype("f4")),
         },
         coords={
             "time": time,

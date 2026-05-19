@@ -3,15 +3,43 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
+import time
 from pathlib import Path
 
 from ayil.fielddump import merge_fielddump
+from ayil.logging_utils import human_bytes, setup_logging
+from ayil.paths import find_repo_root, resolve_output_path, resolve_run_dir
+from zarr.codecs import BloscCodec
+
 from ayil.zarr_store import FIELDDUMP_CHUNKS_CENTER, write_dataset_zarr
 
+AYIL_COMPLETE = ".ayil_complete"
+AYIL_RUNNING = ".ayil_running"
 
-def default_zarr_path(run_dir: Path) -> Path:
-    return run_dir / "data.zarr"
+
+def _check_run_ready(run_dir: Path, *, require_complete: bool, log: logging.Logger) -> None:
+    complete = run_dir / AYIL_COMPLETE
+    running = run_dir / AYIL_RUNNING
+
+    if running.exists() and not complete.exists():
+        raise RuntimeError(
+            f"{run_dir} is still marked running ({AYIL_RUNNING}). "
+            "Wait for DALES to finish or remove the stale marker."
+        )
+
+    if require_complete and not complete.exists():
+        raise RuntimeError(
+            f"{run_dir} has no {AYIL_COMPLETE}. "
+            "Simulation may still be in progress or failed. "
+            "Use --allow-incomplete to convert anyway (partial tiles may fail)."
+        )
+
+    if complete.exists():
+        log.info("Run status: %s present", AYIL_COMPLETE)
+    else:
+        log.warning("Run status: no %s (--allow-incomplete)", AYIL_COMPLETE)
 
 
 def convert_run(
@@ -22,30 +50,86 @@ def convert_run(
     chunks_center: tuple[int, int, int, int] = FIELDDUMP_CHUNKS_CENTER,
     include_staggered: bool = True,
     overwrite: bool = False,
+    require_complete: bool = True,
+    consolidated: bool = True,
+    codec: BloscCodec | None = None,
+    log: logging.Logger | None = None,
 ) -> Path:
-    run_dir = Path(run_dir)
-    out = Path(output) if output else default_zarr_path(run_dir)
+    """
+    Merge fielddump tiles under ``run_dir`` and write a Zarr store.
+
+    All path resolution and progress logging happen here (not in shell).
+    """
+    log = log or logging.getLogger("ayil")
+    run_dir = Path(run_dir).resolve()
+    out = Path(output).resolve() if output else (run_dir / "data.zarr")
+
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"run directory not found: {run_dir}")
+
+    _check_run_ready(run_dir, require_complete=require_complete, log=log)
 
     if out.exists() and not overwrite:
         raise FileExistsError(
             f"{out} already exists; pass --overwrite to replace"
         )
 
+    t0 = time.perf_counter()
+    log.info("Merge fielddump tiles from %s (expnr=%s)", run_dir, expnr)
     ds = merge_fielddump(
-        run_dir, expnr=expnr, include_staggered=include_staggered
+        run_dir,
+        expnr=expnr,
+        include_staggered=include_staggered,
+        log=log,
     )
-    write_dataset_zarr(ds, out, mode="w", chunks_center=chunks_center)
+    t_merge = time.perf_counter()
+    log.info(
+        "Merged dataset: %s  (%d data vars, %.1f s)",
+        dict(ds.sizes),
+        len(ds.data_vars),
+        t_merge - t0,
+    )
+
+    log.info(
+        "Write Zarr -> %s  (center chunks=%s, staggered=%s)",
+        out,
+        chunks_center,
+        include_staggered,
+    )
+    write_dataset_zarr(
+        ds,
+        out,
+        mode="w",
+        chunks_center=chunks_center,
+        codec=codec,
+        consolidated=consolidated,
+    )
+    t_done = time.perf_counter()
+
+    try:
+        zarr_bytes = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+        log.info("Zarr size on disk: %s", human_bytes(zarr_bytes))
+    except OSError:
+        pass
+
+    log.info("Done in %.1f s (merge %.1f s, write %.1f s)", t_done - t0, t_merge - t0, t_done - t_merge)
     return out
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Merge DALES fielddump tiles into a single Zarr store."
+        description="Merge DALES fielddump tiles into a single Zarr store.",
+        epilog=(
+            "Primary entry point (no bash required):\n"
+            "  python -m ayil.convert runs/20200720\n"
+            "Paths relative to the repo root are resolved automatically."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "run_dir",
         type=Path,
-        help="Run directory (e.g. runs/20200720)",
+        help="Run directory (e.g. runs/20200720), relative to repo root or absolute",
     )
     parser.add_argument(
         "-o",
@@ -65,21 +149,79 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Replace existing Zarr store",
     )
+    parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help=f"Do not require {AYIL_COMPLETE} before converting",
+    )
+    parser.add_argument(
+        "--no-consolidated",
+        action="store_true",
+        help="Do not write consolidated metadata to zarr.json (slower opens)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Debug logging (per-tile details)",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Only warnings and errors",
+    )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        help="Also write logs to this file (e.g. runs/20200720/convert.log)",
+    )
     args = parser.parse_args(argv)
 
+    repo_root = find_repo_root()
+    run_dir = resolve_run_dir(args.run_dir, repo_root=repo_root)
+    output = (
+        resolve_output_path(args.output, run_dir=run_dir, repo_root=repo_root)
+        if args.output is not None
+        else None
+    )
+
+    log_file = args.log_file
+    if log_file is not None:
+        log_file = resolve_output_path(log_file, run_dir=run_dir, repo_root=repo_root)
+    elif not args.quiet:
+        # Default: conversion log beside the run (easy to find).
+        log_file = run_dir / "convert.log"
+
     try:
-        out = convert_run(
-            args.run_dir,
-            output=args.output,
-            expnr=args.expnr,
-            include_staggered=not args.no_staggered,
-            overwrite=args.overwrite,
-        )
-    except (FileNotFoundError, OSError, ValueError) as exc:
+        log = setup_logging(verbose=args.verbose, quiet=args.quiet, log_file=log_file)
+    except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    log.info("Repo root: %s", repo_root)
+    log.info("Run dir:   %s", run_dir)
+
+    try:
+        out = convert_run(
+            run_dir,
+            output=output,
+            expnr=args.expnr,
+            include_staggered=not args.no_staggered,
+            overwrite=args.overwrite,
+            require_complete=not args.allow_incomplete,
+            consolidated=not args.no_consolidated,
+            log=log,
+        )
+    except (FileNotFoundError, FileExistsError, RuntimeError, OSError, ValueError) as exc:
+        log.error("%s", exc)
+        return 1
+
+    log.info("Wrote %s", out)
     print(f"Wrote {out}")
+    if log_file is not None:
+        print(f"Log: {log_file}", file=sys.stderr)
     return 0
 
 

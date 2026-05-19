@@ -1,4 +1,4 @@
-"""Write xarray Datasets to Zarr with fixed, predetermined chunk shapes."""
+"""Write xarray Datasets to Zarr v3 with fixed, predetermined chunk shapes."""
 
 from __future__ import annotations
 
@@ -6,9 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import xarray as xr
+from zarr.codecs import BloscCodec
 
-# Zarr v2 + numcodecs works with xarray; env has zarr 3.x which retains v2 API.
-ZARR_FORMAT = 2
+# Blosc for v3 writes: xarray passes encoding["compressors"] to zarr, which expects
+# zarr.codecs.* instances. numcodecs.Blosc is the Zarr v2 codec API and raises
+# TypeError if passed on a v3 write (even under the "compressors" key).
+DEFAULT_BLOSC = BloscCodec(cname="zstd", clevel=3, shuffle="bitshuffle")
 
 # ---------------------------------------------------------------------------
 # AYIL fielddump grid (from namoptions: itot=jtot=320, khigh=200, runtime=7200,
@@ -47,18 +50,24 @@ FIELDDUMP_CHUNK_BYTES_FLOAT32 = (
 
 def fielddump_chunks_for_dims(dims: tuple[str, ...]) -> tuple[int, ...]:
     """
-  Map dimension names to the predetermined fielddump chunk lengths.
+    Map dimension names to the predetermined fielddump chunk lengths.
 
-  Center scalars use (time, z, y, x). Unknown dims get length 1.
-  """
+    Center scalars use (time, z, y, x). Unknown dims get length 1.
+    """
     lookup = {
         "time": FIELDDUMP_CHUNKS_TIME,
         "z": FIELDDUMP_CHUNKS_Z,
         "zt": FIELDDUMP_CHUNKS_Z,
+        "zm": FIELDDUMP_CHUNKS_Z,
+        "zw": FIELDDUMP_CHUNKS_Z,
         "y": FIELDDUMP_CHUNKS_Y,
         "yt": FIELDDUMP_CHUNKS_Y,
+        "yv": FIELDDUMP_CHUNKS_Y,
+        "ym": FIELDDUMP_CHUNKS_Y,
         "x": FIELDDUMP_CHUNKS_X,
         "xt": FIELDDUMP_CHUNKS_X,
+        "xu": FIELDDUMP_CHUNKS_X,
+        "xm": FIELDDUMP_CHUNKS_X,
     }
     return tuple(lookup.get(d, 1) for d in dims)
 
@@ -67,13 +76,11 @@ def zarr_encoding(
     ds: xr.Dataset,
     *,
     chunks_center: tuple[int, int, int, int] = FIELDDUMP_CHUNKS_CENTER,
-    compressor: Any | None = None,
+    codec: BloscCodec | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Build xarray→zarr encoding using fixed chunk shapes (no runtime sizing)."""
-    if compressor is None and ZARR_FORMAT == 2:
-        from numcodecs import Blosc
-
-        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    """Build xarray→Zarr v3 encoding using fixed chunk shapes (no runtime sizing)."""
+    if codec is None:
+        codec = DEFAULT_BLOSC
 
     encoding: dict[str, dict[str, Any]] = {}
     for name, da in ds.data_vars.items():
@@ -83,8 +90,9 @@ def zarr_encoding(
             chunk_tuple = fielddump_chunks_for_dims(da.dims)
 
         enc: dict[str, Any] = {"chunks": chunk_tuple}
-        if compressor is not None:
-            enc["compressor"] = compressor
+        if codec is not None:
+            # Zarr v3 encoding key is "compressors" (list), not deprecated "compressor".
+            enc["compressors"] = [codec]
         encoding[name] = enc
     return encoding
 
@@ -96,29 +104,41 @@ def write_dataset_zarr(
     mode: str = "w",
     chunks_center: tuple[int, int, int, int] = FIELDDUMP_CHUNKS_CENTER,
     group: str | None = None,
-    compressor: Any | None = None,
+    codec: BloscCodec | None = None,
+    consolidated: bool = True,
+    zarr_format: int = 3,
 ) -> Path:
     """
-  Write ``ds`` to a Zarr store (directory) with predetermined chunking.
+    Write ``ds`` to a Zarr store (directory) with predetermined chunking.
 
-  Parameters
-  ----------
-  chunks_center:
-      Chunk shape for variables on ``(time, z, y, x)``; defaults to preset B.
-  """
+    Parameters
+    ----------
+    chunks_center:
+        Chunk shape for variables on ``(time, z, y, x)``; defaults to preset B.
+    codec:
+        Zarr v3 Blosc codec (default ``DEFAULT_BLOSC``). Must be ``zarr.codecs.BloscCodec``.
+    consolidated:
+        If True (default), embed consolidated metadata in root ``zarr.json`` for fast
+        ``xr.open_zarr`` (supported by zarr-python/xarray; not part of the Zarr v3 spec).
+    zarr_format:
+        Zarr store format version. Only ``3`` is supported by this repo.
+    """
+    if zarr_format != 3:
+        raise ValueError(
+            f"Only Zarr format 3 is supported; got zarr_format={zarr_format!r}"
+        )
+
     store_path = Path(store_path)
     if store_path.suffix != ".zarr":
         store_path = store_path.with_suffix(".zarr")
 
-    encoding = zarr_encoding(
-        ds, chunks_center=chunks_center, compressor=compressor
-    )
+    encoding = zarr_encoding(ds, chunks_center=chunks_center, codec=codec)
     ds.to_zarr(
         store_path,
         mode=mode,
         encoding=encoding,
         group=group,
-        consolidated=True,
-        zarr_format=ZARR_FORMAT,
+        consolidated=consolidated,
+        zarr_format=zarr_format,
     )
     return store_path

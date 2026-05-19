@@ -9,7 +9,6 @@ dependencies:
   - xarray
   - netcdf4
   - zarr
-  - numcodecs
   - numpy
   - pytest
   - pip  # conda meta-package only; do not pip-install deps
