@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Submit Slurm job(s) for MOSAiC AYIL DALES runs. Skips complete days unless --force.
 #
+# Default: chunked mode — each day is a chain of 30 min simulation segments (restart
+# handoff) so jobs finish within the 8 h walltime. Use --no-chunked for one job/day.
+#
 # Usage:
-#   slurm_submit.sh --pending                 # one job array for all submit-eligible days
+#   slurm_submit.sh --pending                 # chunked chains for all eligible days
 #   slurm_submit.sh --pending --limit 5
-#   slurm_submit.sh 20200720 20200721         # explicit dates (still skips complete)
-#   slurm_submit.sh --pending --separate      # one sbatch per day (not an array)
+#   slurm_submit.sh 20200720 20200721         # explicit dates
 #   slurm_submit.sh --pending --dry-run
-#   slurm_submit.sh --pending --force         # include complete days (re-run)
+#   slurm_submit.sh --pending --force         # re-run complete days
+#   slurm_submit.sh --pending --no-chunked    # single 3 h job per day (needs walltime)
 #
 # Options:
 #   --force       Re-run complete days (passed to jobs as AYIL_FORCE=1)
 #   --dry-run     Print what would be submitted; do not call sbatch
 #   --limit N     Submit at most N days
-#   --separate    Individual sbatch per day (default: single job array, no concurrency cap)
+#   --no-chunked  One sbatch per day (no restart chain; may hit 8 h wall before 10800 s)
 #   --status      Show submit/skip breakdown only
 #
 # Prereqs: build dales4 on the login node (./scripts/build_dales.sh) unless
@@ -31,16 +34,18 @@ source "${SCRIPT_DIR}/lib/pending_dates.sh"
 source "${SCRIPT_DIR}/lib/slurm_defaults.sh"
 # shellcheck source=lib/logging_paths.sh
 source "${SCRIPT_DIR}/lib/logging_paths.sh"
+# shellcheck source=lib/chunk_run.sh
+source "${SCRIPT_DIR}/lib/chunk_run.sh"
 
 FORCE=0
 DRY_RUN=0
 LIMIT=0
-SEPARATE=0
+CHUNKED=1
 MODE="pending"
 DATES=()
 
 usage() {
-  sed -n '2,22p' "$0"
+  sed -n '2,28p' "$0"
   exit "${1:-0}"
 }
 
@@ -50,9 +55,14 @@ while [[ $# -gt 0 ]]; do
     --force) FORCE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --limit) LIMIT="$2"; shift 2 ;;
-    --separate) SEPARATE=1; shift ;;
+    --no-chunked) CHUNKED=0; shift ;;
+    --chunked) CHUNKED=1; shift ;;
     --pending) MODE="pending"; shift ;;
     --status) MODE="status"; shift ;;
+    --separate)
+      echo "NOTE: --separate is ignored; chunked mode always uses per-day job chains." >&2
+      shift
+      ;;
     -*) echo "Unknown option: $1" >&2; usage 1 ;;
     *) DATES+=("$1"); MODE="explicit"; shift ;;
   esac
@@ -78,6 +88,14 @@ SKIPPED=()
 for date in "${AYIL_PENDING_DATES[@]}"; do
   run_dir="${AYIL_RUNS}/${date}"
   if ayil_should_submit_date "${run_dir}" "${FORCE}"; then
+    if [[ "${CHUNKED}" -eq 1 ]]; then
+      n_chunks="$(ayil_n_chunks)"
+      first="$(ayil_first_incomplete_chunk "${run_dir}" "${n_chunks}")"
+      if (( first < 0 )) && (( FORCE != 1 )); then
+        SKIPPED+=("${date}")
+        continue
+      fi
+    fi
     TO_SUBMIT+=("${date}")
   else
     SKIPPED+=("${date}")
@@ -120,31 +138,41 @@ if ((${#TO_SUBMIT[@]} == 0)); then
   exit 0
 fi
 
-mkdir -p "${AYIL_SLURM_LOG_DIR}"
-DATE_LIST="${AYIL_RUNS}/.slurm_pending_dates"
-printf '%s\n' "${TO_SUBMIT[@]}" > "${DATE_LIST}"
-
-log_msg "Submit list (${#TO_SUBMIT[@]} days) -> ${DATE_LIST}"
+log_msg "Submit list (${#TO_SUBMIT[@]} days) chunked=${CHUNKED}"
 for date in "${TO_SUBMIT[@]}"; do
   log_msg "  RUN ${date}"
 done
 
 ayil_slurm_sbatch_opts SBATCH_OPTS
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
-EXPORT_BASE="ALL,AYIL_SLURM_DATE_LIST=${DATE_LIST},AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
+EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
+
+if [[ "${CHUNKED}" -eq 1 ]]; then
+  N_CHUNKS="$(ayil_n_chunks)"
+  EXPORT_BASE="${EXPORT_BASE},AYIL_USE_RESTART_CHUNKS=1,AYIL_N_CHUNKS=${N_CHUNKS}"
+  EXPORT_BASE="${EXPORT_BASE},AYIL_DAY_RUNTIME_SEC=${AYIL_DAY_RUNTIME_SEC},AYIL_CHUNK_SIM_SEC=${AYIL_CHUNK_SIM_SEC}"
+else
+  EXPORT_BASE="${EXPORT_BASE},AYIL_USE_RESTART_CHUNKS=0"
+fi
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   log_msg "DRY-RUN: would submit with:"
   printf '  %s\n' "${SBATCH_OPTS[@]}"
-  if [[ "${SEPARATE}" -eq 1 ]]; then
-    for date in "${TO_SUBMIT[@]}"; do
+  for date in "${TO_SUBMIT[@]}"; do
+    if [[ "${CHUNKED}" -eq 1 ]]; then
+      first="$(ayil_first_incomplete_chunk "${AYIL_RUNS}/${date}" "${N_CHUNKS}")"
+      (( first < 0 )) && first=0
+      dep=""
+      for ((c = first; c < N_CHUNKS; c++)); do
+        dep_flag=""
+        [[ -n "${dep}" ]] && dep_flag=" --dependency=afterok:${dep}"
+        log_msg "  sbatch${dep_flag} ${SBATCH_OPTS[*]} --job-name=ayil_${date}_c${c} --export=${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c} ${SLURM_SCRIPT}"
+        dep="<job_${c}>"
+      done
+    else
       log_msg "  sbatch ${SBATCH_OPTS[*]} --export=${EXPORT_BASE},DATE=${date} ${SLURM_SCRIPT}"
-    done
-  else
-    local_last=$(( ${#TO_SUBMIT[@]} - 1 ))
-    array_spec="$(ayil_slurm_array_spec "${local_last}")"
-    log_msg "  sbatch ${SBATCH_OPTS[*]} --array=${array_spec} --export=${EXPORT_BASE} ${SLURM_SCRIPT}"
-  fi
+    fi
+  done
   exit 0
 fi
 
@@ -155,44 +183,55 @@ if [[ ! -x "${DALES_BIN}" && "${AYIL_SLURM_BUILD:-0}" != "1" ]]; then
   exit 1
 fi
 
-submit_one() {
+submit_chunk_chain() {
   local date="$1"
   local run_dir="${AYIL_RUNS}/${date}"
-  ayil_ensure_run_logs "${run_dir}"
-  local slurm_log
-  slurm_log="$(ayil_slurm_log_out "${run_dir}")"
+  local first n_chunks c
+  n_chunks="$(ayil_n_chunks)"
+  first="$(ayil_first_incomplete_chunk "${run_dir}" "${n_chunks}")"
+  if (( first < 0 )); then
+    first=0
+  fi
+  local prev_jid="" jid dep_args
+  for ((c = first; c < n_chunks; c++)); do
+    dep_args=()
+    if [[ -n "${prev_jid}" ]]; then
+      dep_args=(--dependency=afterok:"${prev_jid}")
+    fi
+    jid="$(
+      sbatch "${SBATCH_OPTS[@]}" "${dep_args[@]}" \
+        --job-name="ayil_${date}_c${c}" \
+        --export="${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c}" \
+        "${SLURM_SCRIPT}" | awk '{print $NF}'
+    )"
+    log_msg "  ${jid}  DATE=${date}  chunk=${c}/${n_chunks}"
+    prev_jid="${jid}"
+  done
+}
+
+submit_one_day() {
+  local date="$1"
   sbatch "${SBATCH_OPTS[@]}" \
-    --output="${slurm_log}" \
-    --error="${slurm_log}" \
+    --job-name="ayil_${date}" \
     --export="${EXPORT_BASE},DATE=${date}" \
     "${SLURM_SCRIPT}"
 }
 
-submit_array() {
-  local last="$1"
-  local array_spec="$2"
-  sbatch "${SBATCH_OPTS[@]}" \
-    --array="${array_spec}" \
-    --export="${EXPORT_BASE}" \
-    "${SLURM_SCRIPT}"
-}
-
-ARRAY_LAST=$(( ${#TO_SUBMIT[@]} - 1 ))
-ARRAY_SPEC="$(ayil_slurm_array_spec "${ARRAY_LAST}")"
-
-if [[ "${SEPARATE}" -eq 1 ]]; then
-  job_ids=()
+total_jobs=0
+if [[ "${CHUNKED}" -eq 1 ]]; then
   for date in "${TO_SUBMIT[@]}"; do
-    jid="$(submit_one "${date}")"
-    log_msg "${jid}  DATE=${date}"
-    job_ids+=("${jid}")
+    log_msg "Submit chain ${date} ($(ayil_n_chunks) chunks, 8h wall each):"
+    submit_chunk_chain "${date}"
+    total_jobs=$(( total_jobs + $(ayil_n_chunks) ))
   done
-  log_msg "Submitted ${#job_ids[@]} separate jobs."
+  log_msg "Submitted ${#TO_SUBMIT[@]} day(s) (${total_jobs} chunk jobs total; many days can run in parallel)."
 else
-  jid="$(submit_array "${ARRAY_LAST}" "${ARRAY_SPEC}")"
-  log_msg "${jid}  array=${ARRAY_SPEC}  (${#TO_SUBMIT[@]} tasks)"
-  log_msg "Monitor: squeue -u \$USER   Cancel: scancel ${jid%% *}"
+  for date in "${TO_SUBMIT[@]}"; do
+    jid="$(submit_one_day "${date}")"
+    log_msg "${jid}  DATE=${date}"
+    total_jobs=$(( total_jobs + 1 ))
+  done
+  log_msg "Submitted ${total_jobs} job(s) (one per day; ensure walltime covers ${AYIL_DAY_RUNTIME_SEC}s sim)."
 fi
 
-log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,dales.log}"
-log_msg "Slurm cluster copy (arrays): ${AYIL_SLURM_LOG_DIR}/"
+log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,progress.log,dales.log}"

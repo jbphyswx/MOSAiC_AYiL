@@ -5,8 +5,9 @@ ayil_config_input_results/.zenodo_bundle_installed
 
 # Pipeline artifacts (see scripts/clean.sh)
 # local directory version and symlink version
-runs/ 
-runs 
+runs/
+runs
+runs/slurm_logs/
 
 dales_ayil/build/
 test/tmp_runs/

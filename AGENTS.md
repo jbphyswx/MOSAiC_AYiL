@@ -88,13 +88,14 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 ```bash
 ./scripts/build_dales.sh                              # login node, once
 ./scripts/slurm_submit.sh --pending --dry-run
-./scripts/slurm_submit.sh --pending                 # one job array: --array=0-N
+./scripts/slurm_submit.sh --pending                 # 6 chained jobs/day (default chunked mode)
 ```
 
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
-- Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,dales.log,convert.log}` (Slurm stderr merged into `slurm.out`). Array cluster copy: `runs/slurm_logs/`. Date list: `runs/.slurm_pending_dates`.
-- **Per-job defaults** in `scripts/lib/slurm_defaults.sh` are documented as aligned with [Caltech Resnick HPC](https://www.hpc.caltech.edu/resources) **resource shape** (1 node, 40 tasks, 128G, 8h) — override via `env.local` on other clusters.
-- **No default array concurrency cap.** Slurm schedules array tasks as partition/QOS/limits allow. Set `AYIL_SLURM_ARRAY_MAX` only when an explicit `--array=0-N%M` throttle is desired.
+- **Default Slurm mode:** chunked — each day is **6 jobs** (`AYIL_CHUNK_SIM_SEC=1800`, `AYIL_DAY_RUNTIME_SEC=10800`) with `--dependency=afterok` so each segment fits **8 h wall**; restart handoff via `initdlatest*` (timed `initd*h*m*` pruned after each chunk). Use `--no-chunked` for one 3 h job/day (needs walltime to finish).
+- Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,progress.log,dales.log,convert.log}`. Chunk progress: `.ayil_chunk_N_complete`; day done: `.ayil_complete`.
+- **Per-job defaults** in `scripts/lib/slurm_defaults.sh`: 1 node, **64 tasks**, **200G** RAM (`NTASKS×3 GiB/rank + 8 GiB headroom), 8h.
+- Many **days** can run in parallel (each day = its own 6-job chain); there is no global “one job at a time” cap unless the partition/QOS limits you.
 - Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
 
 ## Simulation config (important facts)
@@ -103,13 +104,13 @@ From Zenodo `namoptions` (all ~190 days use the same pattern):
 
 | Setting | Value | Notes |
 |---------|-------|--------|
-| `runtime` | `7200` s | **2 h** integration per day |
-| `trestart` | `-1` | **No restart files** (`initd*`/`inits*`); Zenodo had `1800` (~77 GiB/day). Set by `prepare_case.sh` via `lib/namoptions_patch.sh`. DALES: `trestart < 0` disables writes. |
-| `namfielddump` `dtav` | `1800` s | 3D snapshots every **30 min** → **4** times per run |
+| `runtime` | `10800` s | **3 h** per day (JAMES paper); `prepare_case.sh` patches staged `namoptions`. Zenodo zip still has `7200`. |
+| `trestart` | `-1` local; `0`/`−1` chunked | Local/`--no-chunked`: no restarts. Slurm chunks: `trestart=0` writes `initdlatest*` at segment end; last chunk `−1`. |
+| `namfielddump` `dtav` | `1800` s | 3D snapshots every **30 min** → **6** times per 3 h run |
 | `namfielddump` `khigh` | `200` | Vertical levels in fielddump |
 | Grid | `320×320×286` (`kmax`) | MPI tiles: `fielddump.III.JJJ.001.nc` |
 
-**Paper vs configs:** JAMES text says **3 h** simulations; Zenodo `namoptions` uniformly have **`runtime = 7200` (2 h)**. This repo reproduces the **archived configs**, not the paper paragraph. `tb_taunudge = 10800` is a nudging timescale, not run length. See README “Simulation length” section before changing runtime or Zarr time chunks.
+**Paper vs Zenodo zip:** JAMES **3 h** is the pipeline default (`10800` s). Git `ayil_config_input_results/*/namoptions` may still show `7200` until refreshed; `prepare_case.sh` always sets `10800` in the run dir. `tb_taunudge = 10800` is nudging timescale, not run length.
 
 Other outputs are **more frequent** than fielddump (e.g. `profiles.001.nc` via `namgenstat`: `dtav=60`, `timeav=300`).
 
@@ -122,7 +123,7 @@ After `.ayil_complete` exists for a day:
 ```
 
 - Merges MPI tiles to `runs/YYYYMMDD/data.zarr/`.
-- Chunk preset **B** (fixed): `(time, z, y, x) = (4, 100, 80, 80)` — one time chunk = full 2 h run; x/y/z tile evenly into 320/320/200.
+- Chunk preset **B** (fixed): `(time, z, y, x) = (6, 100, 80, 80)` — one time chunk = full 3 h run; x/y/z tile evenly into 320/320/200.
 - CLI: `python -m ayil.convert` — `--overwrite`, `--no-staggered`; no runtime `--chunk-mb`.
 
 ## Tests

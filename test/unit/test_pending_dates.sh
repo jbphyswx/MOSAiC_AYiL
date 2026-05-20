@@ -38,3 +38,11 @@ if ! ayil_should_submit_date "${TMP}" 0; then
 else
   test_fail "running should not submit without force"
 fi
+
+touch "${TMP}/.ayil_chunk_0_complete"
+rm -f "${TMP}/${AYIL_STATUS_RUNNING}" "${TMP}/${AYIL_STATUS_COMPLETE}"
+if ayil_should_submit_date "${TMP}" 0; then
+  test_pass "partial chunk day is submittable"
+else
+  test_fail "partial chunk day should submit"
+fi

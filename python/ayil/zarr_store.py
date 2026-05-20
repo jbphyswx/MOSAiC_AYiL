@@ -14,19 +14,19 @@ from zarr.codecs import BloscCodec
 DEFAULT_BLOSC = BloscCodec(cname="zstd", clevel=3, shuffle="bitshuffle")
 
 # ---------------------------------------------------------------------------
-# AYIL fielddump grid (from namoptions: itot=jtot=320, khigh=200, runtime=7200,
+# AYIL fielddump grid (from namoptions: itot=jtot=320, khigh=200, runtime=10800,
 # fielddump dtav=1800). These are fixed for every MOSAiC_AYIL day in this repo.
 # ---------------------------------------------------------------------------
 FIELDDUMP_NX = 320
 FIELDDUMP_NY = 320
 FIELDDUMP_NZ = 200  # namfielddump khigh
 FIELDDUMP_TIME_STEP_S = 1800
-FIELDDUMP_RUNTIME_S = 7200
-FIELDDUMP_N_TIME = FIELDDUMP_RUNTIME_S // FIELDDUMP_TIME_STEP_S  # 4 dumps per day
+FIELDDUMP_RUNTIME_S = 10800
+FIELDDUMP_N_TIME = FIELDDUMP_RUNTIME_S // FIELDDUMP_TIME_STEP_S  # 6 dumps per day
 
-# Preset B (repo default): full 2 h of output per time chunk; even tiles in x,y,z.
-# float32 payload per chunk: 4 × 100 × 80 × 80 × 4 B = 10_240_000 B (~9.77 MiB, before compression).
-FIELDDUMP_CHUNKS_TIME = 4
+# Preset B (repo default): full 3 h of output per time chunk; even tiles in x,y,z.
+# float32 payload per chunk: 6 × 100 × 80 × 80 × 4 B = 15_360_000 B (~14.6 MiB, before compression).
+FIELDDUMP_CHUNKS_TIME = 6
 FIELDDUMP_CHUNKS_Z = 100
 FIELDDUMP_CHUNKS_Y = 80
 FIELDDUMP_CHUNKS_X = 80

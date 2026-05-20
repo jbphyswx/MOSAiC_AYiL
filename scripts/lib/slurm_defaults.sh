@@ -2,16 +2,24 @@
 # Slurm resource defaults for MOSAiC_AYIL. Source after config.sh.
 #
 # Defaults are tuned for the Caltech Resnick HPC cluster
-# (https://www.hpc.caltech.edu/resources): single-node MPI jobs with ~40 ranks
-# on 64-core Icelake nodes, 128G RAM, 8h walltime. Override in scripts/env.local
-# on other systems — nothing here is cluster-specific except comments.
+# (https://www.hpc.caltech.edu/resources): single-node MPI, 64 ranks (320 grid),
+# 8h walltime. Override in scripts/env.local on other systems.
+#
+# Slurm --mem is **total RAM for the job** (one node), not per rank. DALES RSS was
+# ~3 GiB/MPI rank at 40 tasks (~116 GiB job RSS). Default memory is therefore
+# ntasks × GiB/rank + headroom (OS, NetCDF, spikes). Set AYIL_SLURM_MEM explicitly
+# to override the formula.
 
 export AYIL_SLURM_JOB_NAME="${AYIL_SLURM_JOB_NAME:-ayil_dales}"
 export AYIL_SLURM_NODES="${AYIL_SLURM_NODES:-1}"
-export AYIL_SLURM_NTASKS="${AYIL_SLURM_NTASKS:-40}"
+export AYIL_SLURM_NTASKS="${AYIL_SLURM_NTASKS:-64}"
 export AYIL_SLURM_CPUS_PER_TASK="${AYIL_SLURM_CPUS_PER_TASK:-1}"
 export AYIL_SLURM_TIME="${AYIL_SLURM_TIME:-08:00:00}"
-export AYIL_SLURM_MEM="${AYIL_SLURM_MEM:-128G}"
+export AYIL_SLURM_MEM_PER_RANK_GIB="${AYIL_SLURM_MEM_PER_RANK_GIB:-3}"
+export AYIL_SLURM_MEM_HEADROOM_GIB="${AYIL_SLURM_MEM_HEADROOM_GIB:-8}"
+if [[ -z "${AYIL_SLURM_MEM:-}" ]]; then
+  export AYIL_SLURM_MEM="$(( AYIL_SLURM_NTASKS * AYIL_SLURM_MEM_PER_RANK_GIB + AYIL_SLURM_MEM_HEADROOM_GIB ))G"
+fi
 # Optional cap on simultaneous array tasks (Slurm --array=0-N%M). Unset = no cap;
 # Slurm schedules tasks as partition/QOS/account limits allow.
 # export AYIL_SLURM_ARRAY_MAX=8
@@ -31,8 +39,6 @@ export AYIL_SLURM_ACCOUNT="${AYIL_SLURM_ACCOUNT:-}"
 export AYIL_SLURM_EXTRA="${AYIL_SLURM_EXTRA:-}"
 # Build dales4 inside each job if missing (0 = expect login-node build).
 export AYIL_SLURM_BUILD="${AYIL_SLURM_BUILD:-0}"
-# Cluster-wide Slurm stdout copy (array jobs). Canonical per-day logs: runs/YYYYMMDD/logs/.
-export AYIL_SLURM_LOG_DIR="${AYIL_SLURM_LOG_DIR:-${AYIL_RUNS}/slurm_logs}"
 
 # Append sbatch arguments to an array variable name (nameref).
 ayil_slurm_sbatch_opts() {

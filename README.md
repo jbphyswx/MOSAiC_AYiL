@@ -6,17 +6,13 @@ Zenodo provides **profile-averaged** outputs; full horizontal fields require rer
 
 **Cursor / agents:** see [AGENTS.md](AGENTS.md) for pipeline entry points, conda env rules, Slurm, and known config facts.
 
-## Simulation length: paper vs Zenodo configs
+## Simulation length and Slurm chunking
 
-> **Discrepancy (known):** [Schnierstein et al. 2024 (JAMES)](https://doi.org/10.1029/2024MS004296) states that each daily simulation runs for **3 hours**. Every `namoptions` in `ayil_config_input_results/` from Zenodo sets `runtime = 7200` (**2 hours**). This repo reproduces the **archived configs as-is** (`7200` s), not the paper’s 3 h wording.
->
-> - Integration length: `runtime` in `&run` (seconds).
-> - **3D field snapshots** (`fielddump.*.*.001.nc`): `namfielddump` `dtav = 1800` → one write every **30 min** → **4** snapshots per 2 h run (not higher cadence).
-> - Other outputs (e.g. `profiles.001.nc`) are more frequent; see `namoptions` (`namgenstat`, `namtimestat`, etc.).
-> - `tb_taunudge = 10800` is a **nudging timescale** (3 h), not simulation duration.
-> - **Restart checkpoints:** Zenodo used `trestart = 1800` (full 3D `initd*` + scalar `inits*` every 30 min, ~77 GiB/day). This pipeline sets **`trestart = -1`** (no restart output; DALES treats `trestart < 0` as off). Applied in `prepare_case.sh` and in archived `ayil_config_input_results/*/namoptions`.
->
-> To match the paper’s 3 h, you would need to change `runtime` (e.g. to `10800`) and revisit downstream assumptions (Zarr `FIELDDUMP_CHUNKS_TIME`, output size estimates). That is **not** the current default pipeline.
+- **Default integration:** `runtime = 10800` s (**3 h**, JAMES paper). `prepare_case.sh` sets this in each run directory (`AYIL_DAY_RUNTIME_SEC`). Zenodo’s zip still ships `7200` s; git-tracked `namoptions` may lag until updated.
+- **3D fielddump:** `dtav = 1800` → **6** snapshots per 3 h day. Zarr preset uses `FIELDDUMP_CHUNKS_TIME = 6`.
+- **Local runs** (`run_local.sh`): one job per day, **`trestart = -1`** (no restart files).
+- **Slurm (default):** `./scripts/slurm_submit.sh --pending` submits **6 chained jobs per day** (30 min sim each, `AYIL_CHUNK_SIM_SEC=1800`) so each job stays within typical **8 h wall** limits. Chunks warm-start from `initdlatest*`; timed restart files are deleted after each successful chunk; the last chunk does not write restarts. Many days can run in parallel (separate chains). Use `--no-chunked` only if your partition allows one job to finish the full 3 h simulation in walltime.
+- **MPI ranks:** default **64** on Slurm (`AYIL_SLURM_NTASKS`); override in `scripts/env.local`.
 
 ## Reproduce everything (start here)
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=ayil_dales
 #SBATCH --nodes=1
-#SBATCH --ntasks=40
+#SBATCH --ntasks=64
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
-#SBATCH --mem=128G
-# Cluster copy (stdout + stderr merged). Canonical per-day: runs/YYYYMMDD/logs/slurm.out
-#SBATCH --output=runs/slurm_logs/%x-%A_%a.out
-#SBATCH --error=runs/slurm_logs/%x-%A_%a.out
+#SBATCH --mem=200G
+# Slurm must have a static --output path at submit time; we discard its copy and tee per-day below.
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
 #
 # Run one MOSAiC day, or one day per array task (see scripts/slurm_submit.sh).
 # SBATCH lines above are defaults; slurm_submit.sh overrides them via sbatch CLI.
@@ -43,15 +43,11 @@ REPO_ROOT="$(ayil_resolve_repo_root)"
 export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
 cd "${REPO_ROOT}"
 
-# shellcheck source=../config.sh
-source "${REPO_ROOT}/scripts/config.sh"
-# shellcheck source=../lib/slurm_defaults.sh
-source "${REPO_ROOT}/scripts/lib/slurm_defaults.sh"
-
-mkdir -p "${AYIL_SLURM_LOG_DIR:-${REPO_ROOT}/runs/slurm_logs}"
-
-export DALES_NPROC="${SLURM_NTASKS:-${AYIL_SLURM_NTASKS}}"
+export DALES_NPROC="${SLURM_NTASKS:-64}"
 export AYIL_FORCE="${AYIL_FORCE:-0}"
+export AYIL_USE_RESTART_CHUNKS="${AYIL_USE_RESTART_CHUNKS:-1}"
+export AYIL_CHUNK_INDEX="${AYIL_CHUNK_INDEX:-0}"
+export AYIL_N_CHUNKS="${AYIL_N_CHUNKS:-}"
 
 if [[ -n "${SLURM_ARRAY_TASK_ID:-}" && -z "${DATE:-}" ]]; then
   : "${AYIL_SLURM_DATE_LIST:?AYIL_SLURM_DATE_LIST must point to a date list file}"
@@ -64,11 +60,16 @@ RUN_DIR="${AYIL_RUNS:-${REPO_ROOT}/runs}/${DATE}"
 # shellcheck source=../lib/logging_paths.sh
 source "${REPO_ROOT}/scripts/lib/logging_paths.sh"
 ayil_ensure_run_logs "${RUN_DIR}"
-echo "Slurm job_id=${SLURM_JOB_ID:-?} array_task=${SLURM_ARRAY_TASK_ID:-?} DATE=${DATE}"
-echo "Canonical logs: $(ayil_slurm_log_out "${RUN_DIR}") ($(ayil_dales_log "${RUN_DIR}") for DALES)"
-if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
-  ayil_slurm_tee_to_run_logs "${RUN_DIR}"
-fi
+# Per-day log file (not /dev/null): redirect bash stdout/stderr before config/modules.
+ayil_slurm_tee_to_run_logs "${RUN_DIR}"
+echo "Slurm job_id=${SLURM_JOB_ID:-?} array_task=${SLURM_ARRAY_TASK_ID:-?} DATE=${DATE} chunk=${AYIL_CHUNK_INDEX:-?}/${AYIL_N_CHUNKS:-?}"
+echo "Logs: $(ayil_slurm_log_out "${RUN_DIR}")  $(ayil_progress_log "${RUN_DIR}")  $(ayil_dales_log "${RUN_DIR}")"
+
+# shellcheck source=../config.sh
+source "${REPO_ROOT}/scripts/config.sh"
+# shellcheck source=../lib/slurm_defaults.sh
+source "${REPO_ROOT}/scripts/lib/slurm_defaults.sh"
+export DALES_NPROC="${SLURM_NTASKS:-${AYIL_SLURM_NTASKS:-${DALES_NPROC}}}"
 
 if [[ "${AYIL_SLURM_BUILD:-0}" == "1" ]] || [[ ! -x "${DALES_BIN:-${REPO_ROOT}/dales_ayil/build/src/dales4}" ]]; then
   "${REPO_ROOT}/scripts/build_dales.sh"

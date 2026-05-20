@@ -22,4 +22,17 @@ grep -q 'trestart = -1' "${TMP}/namoptions" || {
   cat "${TMP}/namoptions"
   exit 1
 }
-echo "PASS: ayil_disable_restart_writes"
+
+ayil_set_runtime "${TMP}/namoptions" 10800
+grep -q 'runtime = 10800' "${TMP}/namoptions" || {
+  echo "FAIL: runtime not 10800" >&2
+  exit 1
+}
+
+export AYIL_USE_RESTART_CHUNKS=0
+ayil_apply_prepare_namoptions "${TMP}/namoptions"
+grep -q 'trestart = -1' "${TMP}/namoptions" || {
+  echo "FAIL: prepare disables restarts" >&2
+  exit 1
+}
+echo "PASS: namoptions_patch"

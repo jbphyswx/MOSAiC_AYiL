@@ -44,8 +44,8 @@ if [[ ! -f "${RUN_DIR}/namoptions" ]]; then
   exit 1
 fi
 
-# Zenodo configs use trestart=1800 (~77 GiB/day of initd/inits); AYIL does not warm-restart.
-ayil_disable_restart_writes "${RUN_DIR}/namoptions"
+# Paper runtime (10800 s); no restart files unless Slurm chunk mode (AYIL_USE_RESTART_CHUNKS=1).
+ayil_apply_prepare_namoptions "${RUN_DIR}/namoptions"
 
 echo "Prepared ${DATE} -> ${RUN_DIR}"
 echo "  scm_in.nc -> ${SCM_SRC}"

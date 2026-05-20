@@ -7,7 +7,8 @@ if [[ -z "${MOSAiC_AYIL_ROOT:-}" ]]; then
   MOSAiC_AYIL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
-if [[ -f "${MOSAiC_AYIL_ROOT}/scripts/env.local" ]]; then
+if [[ -f "${MOSAiC_AYIL_ROOT}/scripts/env.local" && -z "${AYIL_ENV_LOCAL_LOADED:-}" ]]; then
+  export AYIL_ENV_LOCAL_LOADED=1
   # shellcheck source=/dev/null
   source "${MOSAiC_AYIL_ROOT}/scripts/env.local"
 fi
@@ -29,6 +30,10 @@ ayil_setup_mpi_env
 source "${_SCRIPT_LIB}/mpi_slots.sh"
 
 export AYIL_PROGRESS_INTERVAL="${AYIL_PROGRESS_INTERVAL:-30}"
+
+# Simulation length (JAMES paper: 3 h). Slurm splits into AYIL_CHUNK_SIM_SEC segments.
+export AYIL_DAY_RUNTIME_SEC="${AYIL_DAY_RUNTIME_SEC:-10800}"
+export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-1800}"
 
 # Auto-detect rank count unless set in env.local or tests (AYIL_SKIP_MPI_AUTO=1).
 if [[ -z "${DALES_NPROC:-}" && -z "${AYIL_SKIP_MPI_AUTO:-}" ]]; then

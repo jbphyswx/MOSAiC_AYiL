@@ -52,19 +52,20 @@ ayil_clean_run_outputs() {
     -name 'fielddump.*.nc' -o -name 'profiles.*.nc' -o -name 'cross*.nc' -o \
     -name 'tmser*.nc' -o -name 'initd*.001' -o -name 'inits*.001' -o \
     -name "${AYIL_STATUS_COMPLETE}" -o -name "${AYIL_STATUS_INTERRUPTED}" -o \
-    -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" \
+    -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" -o \
+    -name '.ayil_chunk_*_complete' \
     \) -delete 2>/dev/null || true
   rm -rf "$(ayil_run_logs_dir "${run_dir}")"
   # Legacy logs at run root (before logs/ layout).
   find "${run_dir}" -maxdepth 1 -name '*.log' -delete 2>/dev/null || true
 }
 
-# Redirect remaining shell output to per-run Slurm logs (also see cluster copy under AYIL_SLURM_LOG_DIR).
+# Send all further bash output to runs/YYYYMMDD/logs/slurm.out.
+# (#SBATCH --output=/dev/null only disables Slurm's *second* copy; this tee is the real log.)
 ayil_slurm_tee_to_run_logs() {
   local run_dir="$1"
   ayil_ensure_run_logs "${run_dir}"
   local out
   out="$(ayil_slurm_log_out "${run_dir}")"
-  # Array jobs: SBATCH writes to runs/slurm_logs/; tee copies into this run's logs/.
   exec > >(tee -a "${out}") 2>&1
 }

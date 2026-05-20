@@ -60,7 +60,7 @@ One simulation at a time on shared workstations (each case is heavy).
 
 Features:
 
-- Timestamped progress every 30 s: sim time / 7200 s, disk usage, delta GB
+- Timestamped progress every 30 s: sim time / target runtime, disk usage, delta GB
 - `runs/YYYYMMDD/.ayil_complete` — finished runs are never overwritten
 - Ctrl+C → `.ayil_interrupted`; re-run same date to retry (or `--force` for clean restart)
 - Logs: `runs/YYYYMMDD/logs/dales.log`, `progress.log`
@@ -78,9 +78,9 @@ Interactive shells without MPI on PATH: `source ./scripts/setup_env.sh`
 
 ## Slurm (HPC batch)
 
-Defaults in `lib/slurm_defaults.sh` are aligned with the [Caltech Resnick HPC](https://www.hpc.caltech.edu/resources) for **per-job** resources (single node, 40 MPI tasks, 128G, 8h walltime). They are **environment variables**, not hardcoded cluster names — override in `scripts/env.local` on other systems.
+Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **200G** RAM (`64×3 + 8` GiB headroom), 8h walltime. Override in `scripts/env.local`.
 
-By default there is **no** cap on how many array tasks run at once; Slurm queues and starts tasks according to partition, QOS, and your allocation. Set `AYIL_SLURM_ARRAY_MAX` only if you want an explicit throttle (e.g. `export AYIL_SLURM_ARRAY_MAX=8` → `--array=0-N%8`).
+**Default submit mode is chunked:** each day → **6 jobs** of 1800 s sim (`--dependency=afterok`), so each job fits 8 h wall while the full day is 10800 s (3 h). Many days submit in parallel (one chain per day). Use `--no-chunked` for one job/day only if walltime allows the full 3 h run.
 
 ### First time on the cluster
 
@@ -95,7 +95,7 @@ cp scripts/env.example scripts/env.local
 ```bash
 ./scripts/list_cases.sh
 ./scripts/slurm_submit.sh --pending --dry-run    # lists RUN vs SKIP; no sbatch
-./scripts/slurm_submit.sh --pending                # one job array
+./scripts/slurm_submit.sh --pending                # chunked chains (6 jobs/day)
 ```
 
 Behavior:
@@ -106,11 +106,11 @@ Behavior:
 | `runs/YYYYMMDD/.ayil_running` | **Not submitted** | Submitted |
 | failed / interrupted / missing | Submitted | Submitted |
 
-The submit script filters **before** `sbatch`. Each array task runs `run_slurm_day.sh`, which skips again if the day completed between submit and start.
+The submit script filters **before** `sbatch`. Each chunk job runs `run_slurm_day.sh` with `AYIL_CHUNK_INDEX`; partial days resume from the first incomplete chunk.
 
 ```bash
 ./scripts/slurm_submit.sh --pending --limit 10           # first 10 eligible days
-./scripts/slurm_submit.sh --pending --separate           # one sbatch per day
+./scripts/slurm_submit.sh --pending --no-chunked         # one 3 h job per day (needs long walltime)
 ./scripts/slurm_submit.sh 20200720 20200721              # explicit dates
 ./scripts/slurm_submit.sh --status --pending             # table only
 ```
@@ -119,9 +119,9 @@ Monitor:
 
 ```bash
 squeue -u "$USER"
-tail -f runs/20200720/logs/slurm.out      # per-day canonical Slurm log
+tail -f runs/20200720/logs/progress.log   # sim time % every 30 s (Slurm + local)
 tail -f runs/20200720/logs/dales.log      # DALES MPI output
-tail -f runs/slurm_logs/ayil_dales-<JOBID>_<TASK>.out   # array cluster copy
+tail -f runs/20200720/logs/slurm.out      # job wrapper (modules, START/DONE)
 ./scripts/list_cases.sh
 ```
 
@@ -143,7 +143,7 @@ sbatch --ntasks=40 --time=08:00:00 --mem=128G \
 |----------|---------|------|
 | `AYIL_SLURM_NTASKS` | `40` | MPI ranks (`#SBATCH --ntasks`) |
 | `AYIL_SLURM_TIME` | `08:00:00` | Walltime |
-| `AYIL_SLURM_MEM` | `128G` | Memory per job |
+| `AYIL_SLURM_MEM` | `200G` (64 ranks) | Total job RAM (`NTASKS×3 + 8` GiB if unset) |
 | `AYIL_SLURM_ARRAY_MAX` | (unset) | Optional max concurrent array tasks (`--array=0-N%M`); unset = no `%` cap |
 | `AYIL_SLURM_PARTITION` | (empty) | Optional partition |
 | `AYIL_SLURM_BUILD` | `0` | Set `1` to compile in each job if binary missing |
@@ -153,12 +153,12 @@ sbatch --ntasks=40 --time=08:00:00 --mem=128G \
 | File | Written by |
 |------|------------|
 | `dales.log` | DALES MPI (`run_local.sh`, `run_slurm_day.sh`) |
-| `progress.log` | `run_local.sh` progress monitor |
+| `progress.log` | `run_local.sh` / `run_slurm_day.sh` — sim time % every 30 s |
 | `slurm.out` | Slurm job wrapper stdout + stderr (merged) |
 | `convert.log` | `python -m ayil.convert` |
 | `smoke.log` | `smoke_test.sh` |
 
-Array jobs also write a cluster copy to `runs/slurm_logs/`. Date list for arrays: `runs/.slurm_pending_dates`.
+Date list for arrays: `runs/.slurm_pending_dates`.
 
 Outputs per day: `profiles.001.nc`, `fielddump.*.*.001.nc`, `.ayil_complete`, `data.zarr/`, …
 

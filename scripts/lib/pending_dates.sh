@@ -12,6 +12,9 @@ ayil_should_submit_date() {
     complete | running)
       (( force == 1 ))
       ;;
+    partial)
+      return 0
+      ;;
     *)
       return 0
       ;;

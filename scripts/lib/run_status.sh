@@ -46,6 +46,8 @@ ayil_run_state() {
   local run_dir="$1"
   if [[ -f "${run_dir}/${AYIL_STATUS_COMPLETE}" ]]; then
     echo "complete"
+  elif compgen -G "${run_dir}/.ayil_chunk_*_complete" >/dev/null 2>&1; then
+    echo "partial"
   elif [[ -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; then
     echo "running"
   elif [[ -f "${run_dir}/${AYIL_STATUS_INTERRUPTED}" ]]; then

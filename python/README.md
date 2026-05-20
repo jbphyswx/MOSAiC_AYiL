@@ -42,7 +42,7 @@ Programmatic API: `convert_run(..., consolidated=True)` and `write_dataset_zarr(
 
 See the root [README.md](../README.md#simulation-length-paper-vs-zenodo-configs) for the **2 h vs 3 h** discrepancy between Zenodo `namoptions` and the JAMES paper.
 
-Predetermined for the AYIL domain (`320×320` horizontal, `200` vertical levels, `1800 s` fielddump cadence, `4` dumps per `7200 s` run):
+Predetermined for the AYIL domain (`320×320` horizontal, `200` vertical levels, `1800 s` fielddump cadence, `6` dumps per `10800 s` run):
 
 | Dim | Chunk | Tiles |
 |-----|-------|-------|
