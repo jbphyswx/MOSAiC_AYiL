@@ -94,7 +94,7 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
 - **Default Slurm mode:** chunked — each day is **6 jobs** (`AYIL_CHUNK_SIM_SEC=1800`, `AYIL_DAY_RUNTIME_SEC=10800`) with `--dependency=afterok` so each segment fits **8 h wall**; restart handoff via `initdlatest*` (timed `initd*h*m*` pruned after each chunk). Use `--no-chunked` for one 3 h job/day (needs walltime to finish).
 - Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,progress.log,dales.log,convert.log}`. Chunk progress: `.ayil_chunk_N_complete`; day done: `.ayil_complete`.
-- **Per-job defaults** in `scripts/lib/slurm_defaults.sh`: 1 node, **64 tasks**, **200G** RAM (`NTASKS×3 GiB/rank + 8 GiB headroom), 8h.
+- **Per-job defaults** in `scripts/lib/slurm_defaults.sh`: 1 node, **64 tasks**, **200G** RAM; **`--time` auto** from `AYIL_CHUNK_SIM_SEC × AYIL_SLURM_WALL_PER_SIM_SEC` (+ headroom, cap `AYIL_SLURM_WALL_MAX_SEC`). Default chunk **600 s** → ~**03:16:00** wall at 17 s/sim.
 - Many **days** can run in parallel (each day = its own 6-job chain); there is no global “one job at a time” cap unless the partition/QOS limits you.
 - Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
 

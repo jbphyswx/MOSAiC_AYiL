@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=64
 #SBATCH --cpus-per-task=1
-#SBATCH --time=08:00:00
+#SBATCH --time=03:15:00
 #SBATCH --mem=200G
 # Slurm must have a static --output path at submit time; we discard its copy and tee per-day below.
 #SBATCH --output=/dev/null

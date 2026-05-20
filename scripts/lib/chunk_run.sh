@@ -5,7 +5,7 @@
 # Seconds of simulation per day (JAMES paper: 3 h). Zenodo archives used 7200 s.
 export AYIL_DAY_RUNTIME_SEC="${AYIL_DAY_RUNTIME_SEC:-10800}"
 # Chunk length (30 min); must divide day runtime evenly for equal chunks.
-export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-1800}"
+export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-600}"
 
 # DALES warm-start template; MPI replaces chars 13:20 with cmyid per rank.
 AYIL_RESTART_STARTFILE="${AYIL_RESTART_STARTFILE:-initdlatestx000y000.001}"

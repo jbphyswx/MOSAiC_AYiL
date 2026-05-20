@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Submit Slurm job(s) for MOSAiC AYIL DALES runs. Skips complete days unless --force.
 #
-# Default: chunked mode — each day is a chain of 30 min simulation segments (restart
-# handoff) so jobs finish within the 8 h walltime. Use --no-chunked for one job/day.
+# Default: chunked mode — short sim segments (default 600 s) with sbatch --time scaled
+# from AYIL_CHUNK_SIM_SEC. Use --no-chunked for one job/day (wall scales to full runtime).
 #
 # Usage:
 #   slurm_submit.sh --pending                 # chunked chains for all eligible days
@@ -143,7 +143,15 @@ for date in "${TO_SUBMIT[@]}"; do
   log_msg "  RUN ${date}"
 done
 
+if [[ "${CHUNKED}" -eq 1 ]]; then
+  export AYIL_SLURM_WALL_SIM_SEC="${AYIL_CHUNK_SIM_SEC}"
+else
+  export AYIL_SLURM_WALL_SIM_SEC="${AYIL_DAY_RUNTIME_SEC}"
+fi
+
 ayil_slurm_sbatch_opts SBATCH_OPTS
+WALL_TIME="$(ayil_slurm_resolve_time)"
+log_msg "sbatch --time=${WALL_TIME} (sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s, wall/sim=${AYIL_SLURM_WALL_PER_SIM_SEC}, cap=${AYIL_SLURM_WALL_MAX_SEC}s)"
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
 EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
 
@@ -220,7 +228,7 @@ submit_one_day() {
 total_jobs=0
 if [[ "${CHUNKED}" -eq 1 ]]; then
   for date in "${TO_SUBMIT[@]}"; do
-    log_msg "Submit chain ${date} ($(ayil_n_chunks) chunks, 8h wall each):"
+    log_msg "Submit chain ${date} ($(ayil_n_chunks) chunks, --time=${WALL_TIME} each):"
     submit_chunk_chain "${date}"
     total_jobs=$(( total_jobs + $(ayil_n_chunks) ))
   done
