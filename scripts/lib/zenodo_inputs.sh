@@ -41,11 +41,11 @@ _ayil_download_url() {
   local url="$2"
   mkdir -p "$(dirname "${dest}")"
   if command -v curl &>/dev/null; then
-    curl -fL --retry 3 --retry-delay 5 -C - -o "${dest}" "${url}"
+    /usr/bin/curl -fL --retry 3 --retry-delay 5 -C - -o "${dest}" "${url}"
     return
   fi
   if command -v wget &>/dev/null; then
-    wget -c -O "${dest}" "${url}"
+    /usr/bin/wget -c -O "${dest}" "${url}"
     return
   fi
   echo "ERROR: need curl or wget to download Zenodo inputs" >&2
