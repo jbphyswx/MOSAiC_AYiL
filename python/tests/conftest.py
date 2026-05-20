@@ -53,12 +53,29 @@ def _write_tile(
     ds.to_netcdf(path, engine="netcdf4")
 
 
+def _write_synthetic_inputs(run: Path, *, nz: int = 4) -> None:
+    """Minimal namoptions + prof.inp matching synthetic fielddump heights."""
+    run.joinpath("namoptions").write_text(
+        "&physics\n"
+        "    ps = 100805.48\n"
+        "    thls = 278.61\n"
+        "/\n",
+        encoding="utf-8",
+    )
+    lines = ["# synthetic test grid\n"]
+    for k in range(nz):
+        zf = (k + 0.5) * 50.0  # matches zt in _write_tile
+        lines.append(f"{zf:.4f} 273.0 5e-06 1.0 1.0 0.1\n")
+    run.joinpath("prof.inp.001").write_text("".join(lines), encoding="utf-8")
+
+
 @pytest.fixture
 def synthetic_run_dir(tmp_path: Path) -> Path:
     """2x2 tiles, 3x3 cells each -> 6x6 global when merged."""
     run = tmp_path / "runs" / "20990101"
     run.mkdir(parents=True)
     nx = ny = 3
+    nz = 4
     for ix, iy in ((0, 0), (1, 0), (0, 1), (1, 1)):
         _write_tile(
             run / f"fielddump.{ix:03d}.{iy:03d}.001.nc",
@@ -66,7 +83,9 @@ def synthetic_run_dir(tmp_path: Path) -> Path:
             iy=iy,
             nx=nx,
             ny=ny,
+            nz=nz,
             x0=ix * nx * 100.0,
             y0=iy * ny * 100.0,
         )
+    _write_synthetic_inputs(run, nz=nz)
     return run

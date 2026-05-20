@@ -28,11 +28,13 @@ conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720 -v --overwrite
 ```
 
 - Resolves `runs/YYYYMMDD` relative to the repo root (no bash path hacks).
-- Logs to stderr and `runs/YYYYMMDD/convert.log` by default.
+- Logs to stderr and `runs/YYYYMMDD/logs/convert.log` by default.
 - Per-tile progress at INFO; use `-v` for DEBUG.
 - Requires `.ayil_complete` unless `--allow-incomplete`.
 
-Options: `--help` (`--no-staggered`, `--no-consolidated`, `--overwrite`, `-q`, `--log-file`, …).
+Options: `--help` (`--no-staggered`, `--no-thermo`, `--no-consolidated`, `--overwrite`, `-q`, `--log-file`, …).
+
+By default the converter adds **`pressure`** `(z)`, **`exner`** `(z)`, and **`temperature`** `(time, z, y, x)`. If rebuilt `dales4` wrote them in fielddump (`presf`, `exnf`, `tmp0`), those are used; otherwise `ayil.thermo` computes them offline (`fromztop` + `T = exner * thl + (L_v/c_p) * ql`, needs `namoptions` and `prof.inp.<expnr>`).
 
 Programmatic API: `convert_run(..., consolidated=True)` and `write_dataset_zarr(..., consolidated=True, zarr_format=3, codec=None)` — defaults match the CLI; no module globals to edit.
 
@@ -67,6 +69,11 @@ Stores are **Zarr v3** with Blosc (zstd, bitshuffle) via `zarr.codecs.BloscCodec
 | Variable class | Examples | Dimensions |
 |----------------|----------|------------|
 | Cell-centered | `qt`, `ql`, `thl`, `buoy`, microphysics scalars | `(time, z, y, x)` |
+| Thermo | `pressure`, `exner`, `temperature` | fielddump (`tmp0` / `presf`) or offline thermo |
+| Vertical flux (w level) | `wqtt`, `wthlt`, `wqlt`, `wtemp`, `wqit`, `wthvt` | `(time, zw, y, x)` — needs **rebuilt** `dales4` |
+| Flux at cell center | `*_c` suffix (e.g. `wtemp_c`) | `(time, z, y, x)` — mean of adjacent `zw` fluxes |
+
+`wtemp` is total **temperature** flux (`exner * wthlt + (L_v/c_p) * wqlt`, same as DALES `t0h` chain). `wqit` is total **ice mixing ratio** flux (SB3 `q_ice` / `sv008`). `wthvt` is buoyancy (virtual θ) flux. If tiles only have `wqtt`/`wthlt`/`wqlt`, convert derives `wtemp` offline; `wqit` still needs a re-run. Re-run after updating `modfielddump.f90`.
 | Staggered winds | `u`, `v`, `w` (MPI tiles stitched) | `u`: `(time, z, y, xu)`; `v`: `(time, z, yv, x)`; `w`: `(time, zw, y, x)` |
 
 Passive tracers from `sv001`–`sv012` in NetCDF are renamed to SB3 bulk micro names (e.g. `n_rain`, `q_rain`, …) per `ayil/scalar_names.py` and `dales_ayil/src/modmicrodata3.f90`.

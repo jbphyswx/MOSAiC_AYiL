@@ -10,6 +10,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
+# shellcheck source=lib/logging_paths.sh
+source "${SCRIPT_DIR}/lib/logging_paths.sh"
 
 DATE="${1:-20200720}"
 NPROC="${2:-16}"
@@ -23,8 +25,9 @@ fi
 
 "${SCRIPT_DIR}/prepare_case.sh" "${DATE}" "${RUN_DIR}"
 
+ayil_ensure_run_logs "${RUN_DIR}"
+LOG="$(ayil_smoke_log "${RUN_DIR}")"
 cd "${RUN_DIR}"
-LOG="${RUN_DIR}/smoke_test.log"
 
 echo "Smoke test: date=${DATE} nproc=${NPROC} timeout=${TIMEOUT_SEC}s"
 echo "Run dir: ${RUN_DIR}"

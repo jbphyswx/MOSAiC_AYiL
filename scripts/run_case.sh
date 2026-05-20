@@ -9,6 +9,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
+# shellcheck source=lib/logging_paths.sh
+source "${SCRIPT_DIR}/lib/logging_paths.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 YYYYMMDD [NPROC] [RUN_DIR]" >&2
@@ -38,8 +40,9 @@ if (( ok == 0 )); then
   echo "WARNING: NPROC=${NPROC} is not a usual factor of 320; DALES may abort in initmpi." >&2
 fi
 
+ayil_ensure_run_logs "${RUN_DIR}"
+LOG="$(ayil_dales_log "${RUN_DIR}")"
 cd "${RUN_DIR}"
-LOG="dales_${DATE}.log"
 
 echo "Running ${DATE} in ${RUN_DIR} with ${NPROC} MPI ranks"
 echo "Log: ${LOG}"

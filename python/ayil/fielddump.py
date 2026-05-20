@@ -9,17 +9,27 @@ from pathlib import Path
 import xarray as xr
 
 from ayil.logging_utils import human_bytes
+from ayil.fluxes import (
+    FIELDDUMP_FLUX_VARS_ZW,
+    add_cell_center_fluxes,
+    add_missing_fluxes,
+)
 from ayil.scalar_names import AYIL_SB3_SCALAR_LONG_NAMES, rename_scalar_variables
 
 FIELDDUMP_PATTERN = re.compile(
     r"^fielddump\.(?P<ix>\d{3})\.(?P<iy>\d{3})\.(?P<exp>\d{3})\.nc$"
 )
 
-CENTER_VARS = ("qt", "ql", "thl", "buoy")
+CENTER_VARS = ("qt", "ql", "thl", "buoy", "pressure", "exner", "temperature")
 WIND_SPECS = {
     "u": ("yt", "xm", {"zt": "z", "yt": "y", "xm": "xu"}),
     "v": ("ym", "xt", {"zt": "z", "ym": "yv", "xt": "x"}),
     "w": ("yt", "xt", {"zm": "zw", "yt": "y", "xt": "x"}),
+}
+
+# Vertical fluxes at w points (same stagger as ``w``); requires rebuilt dales4 with flux fielddump.
+FLUX_SPECS = {
+    name: ("yt", "xt", {"zm": "zw", "yt": "y", "xt": "x"}) for name in FIELDDUMP_FLUX_VARS_ZW
 }
 
 
@@ -131,13 +141,16 @@ def merge_fielddump(
     *,
     expnr: str = "001",
     include_staggered: bool = True,
+    include_fluxes: bool = True,
+    flux_at_cell_centers: bool = True,
     log: logging.Logger | None = None,
 ) -> xr.Dataset:
     """
     Merge all fielddump tiles into one xarray Dataset on the global grid.
 
-    Cell-centered fields use ``(time, z, y, x)``. Winds use Arakawa-C stagger
-    coordinates ``xu``, ``yv``, and ``zw`` respectively. Scalars ``sv001``… are
+    Cell-centered fields use ``(time, z, y, x)``. Winds and vertical fluxes use
+    Arakawa-C stagger ``xu``, ``yv``, ``zw``. Optional cell-centered fluxes
+    (``wqtt_c``, …) average ``zw`` fluxes onto ``z``. Scalars ``sv001``… are
     renamed to SB3 bulk-microphysics names (see ``scalar_names.py``).
     """
     log = log or logging.getLogger("ayil")
@@ -154,6 +167,7 @@ def merge_fielddump(
 
     center_parts: list[xr.Dataset] = []
     wind_parts: dict[str, list[xr.DataArray]] = {k: [] for k in WIND_SPECS}
+    flux_parts: dict[str, list[xr.DataArray]] = {k: [] for k in FLUX_SPECS}
 
     for n, path in enumerate(paths, start=1):
         ix, iy = parse_tile_index(path)
@@ -192,6 +206,15 @@ def merge_fielddump(
                     da.attrs["tile_iy"] = iy
                     wind_parts[name].append(da)
 
+            if include_fluxes:
+                for name, (y_dim, x_dim, dim_rename) in FLUX_SPECS.items():
+                    if name not in ds:
+                        continue
+                    da = ds[name].load()
+                    da.attrs["tile_ix"] = ix
+                    da.attrs["tile_iy"] = iy
+                    flux_parts[name].append(da)
+
     if not center_parts:
         raise ValueError(f"no cell-centered variables found in {run_dir}")
 
@@ -215,6 +238,26 @@ def merge_fielddump(
             merged[name] = _merge_wind(
                 parts, y_dim=y_dim, x_dim=x_dim, dim_rename=dim_rename
             )
+
+    if include_fluxes:
+        for name, (y_dim, x_dim, dim_rename) in FLUX_SPECS.items():
+            parts = flux_parts[name]
+            if not parts:
+                log.warning("Flux %s missing from all tiles (rebuild dales4?)", name)
+                continue
+            log.info(
+                "Stitching flux %s along %s then %s (%d tiles)",
+                name,
+                x_dim,
+                y_dim,
+                len(parts),
+            )
+            merged[name] = _merge_wind(
+                parts, y_dim=y_dim, x_dim=x_dim, dim_rename=dim_rename
+            )
+        merged = add_missing_fluxes(merged, run_dir=run_dir, expnr=expnr, log=log)
+        if flux_at_cell_centers and any(n in merged for n in FIELDDUMP_FLUX_VARS_ZW):
+            merged = add_cell_center_fluxes(merged, flux_vars=FIELDDUMP_FLUX_VARS_ZW)
 
     merged.attrs.update(
         {

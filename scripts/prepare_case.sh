@@ -9,6 +9,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
+# shellcheck source=lib/namoptions_patch.sh
+source "${SCRIPT_DIR}/lib/namoptions_patch.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 YYYYMMDD [RUN_DIR]" >&2
@@ -42,6 +44,9 @@ if [[ ! -f "${RUN_DIR}/namoptions" ]]; then
   echo "ERROR: missing namoptions in ${RUN_DIR}" >&2
   exit 1
 fi
+
+# Zenodo configs use trestart=1800 (~77 GiB/day of initd/inits); AYIL does not warm-restart.
+ayil_disable_restart_writes "${RUN_DIR}/namoptions"
 
 echo "Prepared ${DATE} -> ${RUN_DIR}"
 echo "  scm_in.nc -> ${SCM_SRC}"

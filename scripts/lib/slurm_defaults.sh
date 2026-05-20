@@ -31,6 +31,7 @@ export AYIL_SLURM_ACCOUNT="${AYIL_SLURM_ACCOUNT:-}"
 export AYIL_SLURM_EXTRA="${AYIL_SLURM_EXTRA:-}"
 # Build dales4 inside each job if missing (0 = expect login-node build).
 export AYIL_SLURM_BUILD="${AYIL_SLURM_BUILD:-0}"
+# Cluster-wide Slurm stdout copy (array jobs). Canonical per-day logs: runs/YYYYMMDD/logs/.
 export AYIL_SLURM_LOG_DIR="${AYIL_SLURM_LOG_DIR:-${AYIL_RUNS}/slurm_logs}"
 
 # Append sbatch arguments to an array variable name (nameref).
@@ -38,6 +39,7 @@ ayil_slurm_sbatch_opts() {
   local -n _out="$1"
   _out=(
     --job-name="${AYIL_SLURM_JOB_NAME}"
+    --chdir="${MOSAiC_AYIL_ROOT}"
     --nodes="${AYIL_SLURM_NODES}"
     --ntasks="${AYIL_SLURM_NTASKS}"
     --cpus-per-task="${AYIL_SLURM_CPUS_PER_TASK}"

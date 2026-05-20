@@ -66,7 +66,7 @@ cp scripts/env.example scripts/env.local   # gitignored
 
 **MPI ranks** must be a **factor of 320** (`itot=jtot=320`). Valid examples: 40, 64, 80. Not every host slot count works (e.g. 48 slots ≠ valid grid decomposition). `config.sh` auto-picks a valid rank count unless `DALES_NPROC` is set in `env.local`.
 
-**Local runs:** one simulation at a time (`run_local.sh`); progress in `runs/YYYYMMDD/progress.log`.
+**Local runs:** one simulation at a time (`run_local.sh`); logs in `runs/YYYYMMDD/logs/` (`dales.log`, `progress.log`).
 
 ## Run completion and overwrite policy
 
@@ -92,7 +92,7 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 ```
 
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
-- Logs: `runs/slurm_logs/`. Date list for arrays: `runs/.slurm_pending_dates`.
+- Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,slurm.err,dales.log,convert.log}`. Array cluster copy: `runs/slurm_logs/`. Date list: `runs/.slurm_pending_dates`.
 - **Per-job defaults** in `scripts/lib/slurm_defaults.sh` are documented as aligned with [Caltech Resnick HPC](https://www.hpc.caltech.edu/resources) **resource shape** (1 node, 40 tasks, 128G, 8h) — override via `env.local` on other clusters.
 - **No default array concurrency cap.** Slurm schedules array tasks as partition/QOS/limits allow. Set `AYIL_SLURM_ARRAY_MAX` only when an explicit `--array=0-N%M` throttle is desired.
 - Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
@@ -104,6 +104,7 @@ From Zenodo `namoptions` (all ~190 days use the same pattern):
 | Setting | Value | Notes |
 |---------|-------|--------|
 | `runtime` | `7200` s | **2 h** integration per day |
+| `trestart` | `-1` | **No restart files** (`initd*`/`inits*`); Zenodo had `1800` (~77 GiB/day). Set by `prepare_case.sh` via `lib/namoptions_patch.sh`. DALES: `trestart < 0` disables writes. |
 | `namfielddump` `dtav` | `1800` s | 3D snapshots every **30 min** → **4** times per run |
 | `namfielddump` `khigh` | `200` | Vertical levels in fielddump |
 | Grid | `320×320×286` (`kmax`) | MPI tiles: `fielddump.III.JJJ.001.nc` |
@@ -143,6 +144,7 @@ Report failures honestly. After substantive script/python changes, run the relev
 | Zarr convert HDF error | Run still writing `fielddump`; wait for completion |
 | `xtime` / scm_in time decode | `scm_in.nc` may need `decode_times=False` for inspection |
 | Slurm `8` concurrent tasks | **Removed** as default; was an arbitrary throttle, not a Caltech limit |
+| Run dir ~80 GiB but Zarr ~3 GiB | Old runs with Zenodo `trestart=1800` wrote `initd*`/`inits*`; delete after `.ayil_complete` or re-`prepare_case` + `--force`. New runs omit them. |
 
 ## Self-correction
 

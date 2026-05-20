@@ -29,6 +29,8 @@ source "${SCRIPT_DIR}/lib/run_status.sh"
 source "${SCRIPT_DIR}/lib/pending_dates.sh"
 # shellcheck source=lib/slurm_defaults.sh
 source "${SCRIPT_DIR}/lib/slurm_defaults.sh"
+# shellcheck source=lib/logging_paths.sh
+source "${SCRIPT_DIR}/lib/logging_paths.sh"
 
 FORCE=0
 DRY_RUN=0
@@ -155,7 +157,11 @@ fi
 
 submit_one() {
   local date="$1"
+  local run_dir="${AYIL_RUNS}/${date}"
+  ayil_ensure_run_logs "${run_dir}"
   sbatch "${SBATCH_OPTS[@]}" \
+    --output="$(ayil_slurm_log_out "${run_dir}")" \
+    --error="$(ayil_slurm_log_err "${run_dir}")" \
     --export="${EXPORT_BASE},DATE=${date}" \
     "${SLURM_SCRIPT}"
 }
@@ -186,4 +192,5 @@ else
   log_msg "Monitor: squeue -u \$USER   Cancel: scancel ${jid%% *}"
 fi
 
-log_msg "Slurm logs: ${AYIL_SLURM_LOG_DIR}/"
+log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,slurm.err,dales.log}"
+log_msg "Slurm cluster copy (arrays): ${AYIL_SLURM_LOG_DIR}/"

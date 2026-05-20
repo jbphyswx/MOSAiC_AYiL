@@ -29,6 +29,8 @@ source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/lib/run_status.sh"
 # shellcheck source=lib/mpi_slots.sh
 source "${SCRIPT_DIR}/lib/mpi_slots.sh"
+# shellcheck source=lib/logging_paths.sh
+source "${SCRIPT_DIR}/lib/logging_paths.sh"
 
 NPROC_REQUESTED="${DALES_NPROC:-64}"
 NPROC="${NPROC_REQUESTED}"
@@ -108,16 +110,10 @@ log_msg() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# Remove generated outputs but keep inputs and namoptions
 ayil_clean_outputs() {
   local run_dir="$1"
   log_msg "Cleaning prior outputs in ${run_dir}"
-  find "${run_dir}" -maxdepth 1 \( \
-    -name 'fielddump.*.nc' -o -name 'profiles.*.nc' -o -name 'cross*.nc' -o \
-    -name 'tmser*.nc' -o -name '*.log' -o -name 'initd*.001' -o \
-    -name "${AYIL_STATUS_COMPLETE}" -o -name "${AYIL_STATUS_INTERRUPTED}" -o \
-    -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" \
-    \) -delete 2>/dev/null || true
+  ayil_clean_run_outputs "${run_dir}"
 }
 
 monitor_run() {
@@ -149,8 +145,10 @@ monitor_run() {
 run_one_date() {
   local DATE="$1"
   local RUN_DIR="${AYIL_RUNS}/${DATE}"
-  local LOG="${RUN_DIR}/dales_${DATE}.log"
-  local PROGRESS_LOG="${RUN_DIR}/progress.log"
+  ayil_ensure_run_logs "${RUN_DIR}"
+  local LOG PROGRESS_LOG
+  LOG="$(ayil_dales_log "${RUN_DIR}")"
+  PROGRESS_LOG="$(ayil_progress_log "${RUN_DIR}")"
 
   local state
   state="$(ayil_run_state "${RUN_DIR}")"

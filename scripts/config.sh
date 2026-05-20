@@ -3,7 +3,9 @@
 #
 # Optional machine overrides: copy scripts/env.example -> scripts/env.local
 
-MOSAiC_AYIL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -z "${MOSAiC_AYIL_ROOT:-}" ]]; then
+  MOSAiC_AYIL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 
 if [[ -f "${MOSAiC_AYIL_ROOT}/scripts/env.local" ]]; then
   # shellcheck source=/dev/null

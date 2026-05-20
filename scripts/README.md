@@ -31,7 +31,7 @@ cp scripts/env.example scripts/env.local
 | `bootstrap_build_tree.sh` | Fix Zenodo-minimal tree before CMake |
 | `build_dales.sh` | Compile `dales4` |
 | `check_prerequisites.sh` | Pre-flight dependency check |
-| `prepare_case.sh YYYYMMDD [RUN_DIR]` | Copy inputs + link `scm_in.nc` |
+| `prepare_case.sh YYYYMMDD [RUN_DIR]` | Copy inputs + link `scm_in.nc`; sets `trestart = -1` (no `initd*`/`inits*`) |
 | `run_case.sh YYYYMMDD [NPROC] [RUN_DIR]` | Full MPI simulation (single day) |
 | **`run_local.sh`** | **Local workstation: progress logs, skip-complete, interrupts** |
 | `diagnose_mpi.sh` | MPI paths, slot limits, recommended `DALES_NPROC` |
@@ -62,7 +62,7 @@ Features:
 - Timestamped progress every 30 s: sim time / 7200 s, disk usage, delta GB
 - `runs/YYYYMMDD/.ayil_complete` — finished runs are never overwritten
 - Ctrl+C → `.ayil_interrupted`; re-run same date to retry (or `--force` for clean restart)
-- Logs: `dales_YYYYMMDD.log`, `progress.log`
+- Logs: `runs/YYYYMMDD/logs/dales.log`, `progress.log`
 
 MPI ranks must **divide 320** (not every host slot count is valid). Run `./scripts/diagnose_mpi.sh` on each machine; `config.sh` auto-picks the largest valid count unless `DALES_NPROC` is set in `env.local`.
 
@@ -118,17 +118,21 @@ Monitor:
 
 ```bash
 squeue -u "$USER"
-tail -f runs/slurm_logs/ayil_dales-<JOBID>_<TASK>.out
+tail -f runs/20200720/logs/slurm.out      # per-day canonical Slurm log
+tail -f runs/20200720/logs/dales.log      # DALES MPI output
+tail -f runs/slurm_logs/ayil_dales-<JOBID>_<TASK>.out   # array cluster copy
 ./scripts/list_cases.sh
 ```
+
+Slurm copies `run_day.slurm` to `/var/spool/slurmd/...` on compute nodes. The job resolves the repo via **`MOSAiC_AYIL_ROOT`** (set by `slurm_submit.sh`), **`SLURM_SUBMIT_DIR`**, or `cd` to the checkout — not via `BASH_SOURCE` in the spool copy. Always submit from the repo (`./scripts/slurm_submit.sh`) or pass `MOSAiC_AYIL_ROOT` explicitly.
 
 ### Single day (manual `sbatch`)
 
 ```bash
-sbatch --export=ALL,DATE=20200720 scripts/slurm/run_day.slurm
+sbatch --export=ALL,DATE=20200720,MOSAiC_AYIL_ROOT=$PWD scripts/slurm/run_day.slurm
 # Or with explicit resources:
 sbatch --ntasks=40 --time=08:00:00 --mem=128G \
-  --export=ALL,DATE=20200720 \
+  --export=ALL,DATE=20200720,MOSAiC_AYIL_ROOT=$PWD \
   scripts/slurm/run_day.slurm
 ```
 
@@ -143,9 +147,19 @@ sbatch --ntasks=40 --time=08:00:00 --mem=128G \
 | `AYIL_SLURM_PARTITION` | (empty) | Optional partition |
 | `AYIL_SLURM_BUILD` | `0` | Set `1` to compile in each job if binary missing |
 
-Slurm stdout/stderr: `runs/slurm_logs/`. Date list for arrays: `runs/.slurm_pending_dates`.
+**Logs** (all under `runs/YYYYMMDD/logs/` — see `lib/logging_paths.sh`):
 
-Outputs per day: `runs/20200720/dales_20200720.log`, `profiles.001.nc`, `fielddump.*.*.001.nc`, `.ayil_complete`, …
+| File | Written by |
+|------|------------|
+| `dales.log` | DALES MPI (`run_local.sh`, `run_slurm_day.sh`) |
+| `progress.log` | `run_local.sh` progress monitor |
+| `slurm.out` / `slurm.err` | Slurm job wrapper (`slurm_submit.sh --separate` or array tee) |
+| `convert.log` | `python -m ayil.convert` |
+| `smoke.log` | `smoke_test.sh` |
+
+Array jobs also write a cluster copy to `runs/slurm_logs/`. Date list for arrays: `runs/.slurm_pending_dates`.
+
+Outputs per day: `profiles.001.nc`, `fielddump.*.*.001.nc`, `.ayil_complete`, `data.zarr/`, …
 
 ## Paths (override in `env.local`)
 

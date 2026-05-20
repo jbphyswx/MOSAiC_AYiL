@@ -51,8 +51,11 @@ echo ""
 SMOKE_DIR="${AYIL_RUNS}/smoke_20200720"
 if [[ -d "${SMOKE_DIR}" ]]; then
   smoke_bytes=$(ayil_dir_size_bytes "${SMOKE_DIR}")
-  smoke_sim=$(ayil_last_sim_time "${SMOKE_DIR}/smoke_test.log" 2>/dev/null || \
-              ayil_last_sim_time "${SMOKE_DIR}/dales_20200720.log" 2>/dev/null || echo "")
+  # shellcheck source=lib/logging_paths.sh
+  source "${SCRIPT_DIR}/lib/logging_paths.sh"
+  smoke_sim=$(ayil_last_sim_time "$(ayil_smoke_log "${SMOKE_DIR}")" 2>/dev/null || \
+              ayil_last_sim_time "$(ayil_dales_log "${SMOKE_DIR}")" 2>/dev/null || \
+              ayil_last_sim_time "${SMOKE_DIR}/smoke_test.log" 2>/dev/null || echo "")
   if [[ -n "${smoke_sim}" && "${smoke_sim}" != "0.00" ]]; then
     proj=$(awk -v b="${smoke_bytes}" -v s="${smoke_sim}" -v r="${RUNTIME}" \
       'BEGIN { printf "%.1f", b * (r/s) / 1024^3 }')

@@ -15,6 +15,8 @@ source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/lib/run_status.sh"
 # shellcheck source=lib/pending_dates.sh
 source "${SCRIPT_DIR}/lib/pending_dates.sh"
+# shellcheck source=lib/logging_paths.sh
+source "${SCRIPT_DIR}/lib/logging_paths.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 YYYYMMDD" >&2
@@ -23,7 +25,8 @@ fi
 
 DATE="$1"
 RUN_DIR="${AYIL_RUNS}/${DATE}"
-LOG="${RUN_DIR}/dales_${DATE}.log"
+ayil_ensure_run_logs "${RUN_DIR}"
+LOG="$(ayil_dales_log "${RUN_DIR}")"
 FORCE="${AYIL_FORCE:-0}"
 NPROC="${DALES_NPROC:-${SLURM_NTASKS:-40}}"
 
@@ -50,12 +53,7 @@ fi
 "${SCRIPT_DIR}/prepare_case.sh" "${DATE}" "${RUN_DIR}"
 
 if (( FORCE == 1 )); then
-  find "${RUN_DIR}" -maxdepth 1 \( \
-    -name 'fielddump.*.nc' -o -name 'profiles.*.nc' -o -name 'cross*.nc' -o \
-    -name 'tmser*.nc' -o -name '*.log' -o -name 'initd*.001' -o \
-    -name "${AYIL_STATUS_COMPLETE}" -o -name "${AYIL_STATUS_INTERRUPTED}" -o \
-    -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" \
-    \) -delete 2>/dev/null || true
+  ayil_clean_run_outputs "${RUN_DIR}"
 fi
 
 runtime="$(ayil_read_runtime "${RUN_DIR}/namoptions")"

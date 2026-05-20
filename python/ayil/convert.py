@@ -11,6 +11,7 @@ from pathlib import Path
 from ayil.fielddump import merge_fielddump
 from ayil.logging_utils import human_bytes, setup_logging
 from ayil.paths import find_repo_root, resolve_output_path, resolve_run_dir
+from ayil.thermo import add_thermo_derivatives_for_run
 from zarr.codecs import BloscCodec
 
 from ayil.zarr_store import FIELDDUMP_CHUNKS_CENTER, write_dataset_zarr
@@ -49,11 +50,15 @@ def convert_run(
     expnr: str = "001",
     chunks_center: tuple[int, int, int, int] = FIELDDUMP_CHUNKS_CENTER,
     include_staggered: bool = True,
+    include_fluxes: bool = True,
+    flux_at_cell_centers: bool = True,
+    add_thermo: bool = True,
     overwrite: bool = False,
     require_complete: bool = True,
     consolidated: bool = True,
     codec: BloscCodec | None = None,
     log: logging.Logger | None = None,
+    repo_root: Path | None = None,
 ) -> Path:
     """
     Merge fielddump tiles under ``run_dir`` and write a Zarr store.
@@ -80,6 +85,8 @@ def convert_run(
         run_dir,
         expnr=expnr,
         include_staggered=include_staggered,
+        include_fluxes=include_fluxes,
+        flux_at_cell_centers=flux_at_cell_centers,
         log=log,
     )
     t_merge = time.perf_counter()
@@ -89,6 +96,17 @@ def convert_run(
         len(ds.data_vars),
         t_merge - t0,
     )
+
+    if add_thermo:
+        root = repo_root if repo_root is not None else find_repo_root()
+        log.info("Add thermo (fielddump if present, else offline from thl/ql/qt)")
+        ds = add_thermo_derivatives_for_run(
+            ds,
+            run_dir,
+            expnr=expnr,
+            repo_root=root,
+            log=log,
+        )
 
     log.info(
         "Write Zarr -> %s  (center chunks=%s, staggered=%s)",
@@ -145,6 +163,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip staggered wind components (u,v,w per tile)",
     )
     parser.add_argument(
+        "--no-fluxes",
+        action="store_true",
+        help="Skip vertical flux fields (wqtt, wthlt, wqlt, wthvt)",
+    )
+    parser.add_argument(
+        "--no-flux-centers",
+        action="store_true",
+        help="Keep zw fluxes only; do not add wqtt_c, wthlt_c, … on z",
+    )
+    parser.add_argument(
+        "--no-thermo",
+        action="store_true",
+        help="Do not add pressure, exner, or temperature derived fields",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace existing Zarr store",
@@ -175,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         "--log-file",
         type=Path,
         default=None,
-        help="Also write logs to this file (e.g. runs/20200720/convert.log)",
+        help="Also write logs to this file (default: runs/20200720/logs/convert.log)",
     )
     args = parser.parse_args(argv)
 
@@ -191,8 +224,9 @@ def main(argv: list[str] | None = None) -> int:
     if log_file is not None:
         log_file = resolve_output_path(log_file, run_dir=run_dir, repo_root=repo_root)
     elif not args.quiet:
-        # Default: conversion log beside the run (easy to find).
-        log_file = run_dir / "convert.log"
+        log_dir = run_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "convert.log"
 
     try:
         log = setup_logging(verbose=args.verbose, quiet=args.quiet, log_file=log_file)
@@ -209,10 +243,14 @@ def main(argv: list[str] | None = None) -> int:
             output=output,
             expnr=args.expnr,
             include_staggered=not args.no_staggered,
+            include_fluxes=not args.no_fluxes,
+            flux_at_cell_centers=not args.no_flux_centers,
+            add_thermo=not args.no_thermo,
             overwrite=args.overwrite,
             require_complete=not args.allow_incomplete,
             consolidated=not args.no_consolidated,
             log=log,
+            repo_root=repo_root,
         )
     except (FileNotFoundError, FileExistsError, RuntimeError, OSError, ValueError) as exc:
         log.error("%s", exc)

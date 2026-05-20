@@ -14,6 +14,7 @@ Zenodo provides **profile-averaged** outputs; full horizontal fields require rer
 > - **3D field snapshots** (`fielddump.*.*.001.nc`): `namfielddump` `dtav = 1800` → one write every **30 min** → **4** snapshots per 2 h run (not higher cadence).
 > - Other outputs (e.g. `profiles.001.nc`) are more frequent; see `namoptions` (`namgenstat`, `namtimestat`, etc.).
 > - `tb_taunudge = 10800` is a **nudging timescale** (3 h), not simulation duration.
+> - **Restart checkpoints:** Zenodo used `trestart = 1800` (full 3D `initd*` + scalar `inits*` every 30 min, ~77 GiB/day). This pipeline sets **`trestart = -1`** (no restart output; DALES treats `trestart < 0` as off). Applied in `prepare_case.sh` and in archived `ayil_config_input_results/*/namoptions`.
 >
 > To match the paper’s 3 h, you would need to change `runtime` (e.g. to `10800`) and revisit downstream assumptions (Zarr `FIELDDUMP_CHUNKS_TIME`, output size estimates). That is **not** the current default pipeline.
 

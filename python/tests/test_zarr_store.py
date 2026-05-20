@@ -140,3 +140,5 @@ def test_convert_run_integration(synthetic_run_dir: Path) -> None:
     )
     assert out.is_dir()
     assert (out / "qt").exists() or ".zarray" in str(list(out.rglob(".zarray"))[0])
+    back = xr.open_zarr(out)
+    assert "temperature" in back and "pressure" in back and "exner" in back

@@ -3,7 +3,7 @@
     lwarmstart = .false.
     startfile = 'initd002h00mx000y000.001'
     runtime = 7200
-    trestart = 1800
+    trestart = -1    ! AYIL: no restart checkpoints (DALES trestart < 0)
     ladaptive = .true.
     irandom = 43
     randthl = 0.1
