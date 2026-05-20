@@ -31,6 +31,8 @@ source "${SCRIPT_DIR}/lib/run_status.sh"
 source "${SCRIPT_DIR}/lib/mpi_slots.sh"
 # shellcheck source=lib/logging_paths.sh
 source "${SCRIPT_DIR}/lib/logging_paths.sh"
+# shellcheck source=lib/chunk_run.sh
+source "${SCRIPT_DIR}/lib/chunk_run.sh"
 
 NPROC_REQUESTED="${DALES_NPROC:-64}"
 NPROC="${NPROC_REQUESTED}"
@@ -180,7 +182,7 @@ run_one_date() {
     return 0
   fi
 
-  if [[ "${FORCE}" -eq 1 ]]; then
+  if ayil_should_clean_run_outputs "${RUN_DIR}" "${FORCE}" 0 0; then
     ayil_clean_outputs "${RUN_DIR}"
   fi
 

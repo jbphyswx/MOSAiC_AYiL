@@ -4,7 +4,7 @@
 # Usage: run_slurm_day.sh YYYYMMDD
 #
 # Environment:
-#   AYIL_FORCE=1              Re-run even if .ayil_complete exists (cleans outputs first)
+#   AYIL_FORCE=1              Re-run .ayil_complete days; wipe outputs on chunk 0 only
 #   AYIL_USE_RESTART_CHUNKS=1 Slurm chunk chain (requires AYIL_CHUNK_INDEX, AYIL_N_CHUNKS)
 #   AYIL_CHUNK_INDEX          Chunk index 0..N-1 (default 0 when chunk mode on)
 #   AYIL_N_CHUNKS             Number of chunks per day (default from AYIL_DAY_RUNTIME_SEC / CHUNK)
@@ -86,7 +86,8 @@ fi
 export AYIL_USE_RESTART_CHUNKS="${CHUNK_MODE}"
 "${SCRIPT_DIR}/prepare_case.sh" "${DATE}" "${RUN_DIR}"
 
-if (( FORCE == 1 )); then
+if ayil_should_clean_run_outputs "${RUN_DIR}" "${FORCE}" "${CHUNK_MODE}" "${CHUNK_IDX}"; then
+  echo "Cleaning prior outputs in ${RUN_DIR} (chunk=${CHUNK_IDX}, force=${FORCE})"
   ayil_clean_run_outputs "${RUN_DIR}"
   ayil_clear_chunk_markers "${RUN_DIR}"
 fi

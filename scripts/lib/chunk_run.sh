@@ -93,3 +93,37 @@ ayil_all_chunks_complete() {
   done
   return 0
 }
+
+# Return 0 if generated outputs should be removed before this job runs.
+#
+# Without --force: wipe only when (re)starting chunk 0 of an incomplete day — removes
+# garbage from crashed old single-job runs; resume chunk k>0 keeps fielddump + restarts.
+# With --force: same wipe on chunk 0 only (not chunk 1..N — avoids deleting prior chunks).
+# Completed days (.ayil_complete) are never cleaned unless --force and this is chunk 0.
+ayil_should_clean_run_outputs() {
+  local run_dir="$1"
+  local force="${2:-0}"
+  local chunk_mode="${3:-0}"
+  local chunk_idx="${4:-0}"
+
+  if [[ -f "${run_dir}/.ayil_complete" ]] && (( force != 1 )); then
+    return 1
+  fi
+
+  if (( force == 1 )); then
+    if [[ "${chunk_mode}" == "1" ]] && (( chunk_idx > 0 )); then
+      return 1
+    fi
+    return 0
+  fi
+
+  if [[ "${chunk_mode}" == "1" ]]; then
+    (( chunk_idx == 0 )) || return 1
+    if ayil_chunk_is_complete "${run_dir}" 0; then
+      return 1
+    fi
+    return 0
+  fi
+
+  return 0
+}

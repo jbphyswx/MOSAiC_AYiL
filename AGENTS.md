@@ -78,7 +78,7 @@ Status files under `runs/YYYYMMDD/` (see `scripts/lib/run_status.sh`):
 | `.ayil_running` | In progress or stale lock — **skipped** by default |
 | `.ayil_interrupted` / `.ayil_failed` | Eligible to retry |
 
-- `run_local.sh` and `slurm_submit.sh` **filter before run/submit**; they do not overwrite complete days unless `--force` / `AYIL_FORCE=1` (cleans outputs in the job).
+- `run_local.sh` and `slurm_submit.sh` **filter before run/submit**; they do not overwrite complete days unless `--force`. Incomplete/crashed days **auto-clean outputs when chunk 0 starts** (no `--force` needed). `--force` re-runs complete days; wipe happens on **chunk 0 only** (not chunk 1..5).
 - Slurm: `./scripts/slurm_submit.sh --pending --dry-run` previews RUN vs SKIP without calling `sbatch`.
 
 ## Slurm (HPC)

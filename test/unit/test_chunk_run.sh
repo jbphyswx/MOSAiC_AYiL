@@ -71,3 +71,35 @@ ayil_prune_timed_restart_files "${RUN}"
   exit 1
 }
 echo "PASS: ayil_prune_timed_restart_files"
+
+RUN2="${TMP}/run2"
+mkdir -p "${RUN2}"
+touch "${RUN2}/fielddump.001.001.001.nc"
+
+# Failed old run: auto-clean on chunk 0 without force
+ayil_should_clean_run_outputs "${RUN2}" 0 1 0 && echo "PASS: auto-clean chunk0 failed day" || {
+  echo "FAIL: should clean chunk0 without force" >&2
+  exit 1
+}
+
+touch "${RUN2}/.ayil_chunk_0_complete"
+ayil_should_clean_run_outputs "${RUN2}" 0 1 1 && {
+  echo "FAIL: should not clean resume chunk1" >&2
+  exit 1
+}
+echo "PASS: no clean resume chunk1"
+
+touch "${RUN2}/.ayil_complete"
+ayil_should_clean_run_outputs "${RUN2}" 0 1 0 && {
+  echo "FAIL: should not clean complete day without force" >&2
+  exit 1
+}
+ayil_should_clean_run_outputs "${RUN2}" 1 1 0 || {
+  echo "FAIL: force should clean complete day at chunk0" >&2
+  exit 1
+}
+ayil_should_clean_run_outputs "${RUN2}" 1 1 2 && {
+  echo "FAIL: force must not clean chunk2 mid-chain" >&2
+  exit 1
+}
+echo "PASS: ayil_should_clean_run_outputs"

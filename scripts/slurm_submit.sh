@@ -13,7 +13,7 @@
 #   slurm_submit.sh --pending --no-chunked    # single 3 h job per day (needs walltime)
 #
 # Options:
-#   --force       Re-run complete days (passed to jobs as AYIL_FORCE=1)
+#   --force       Re-run .ayil_complete days; chunk 0 wipes outputs, later chunks keep them
 #   --dry-run     Print what would be submitted; do not call sbatch
 #   --limit N     Submit at most N days
 #   --no-chunked  One sbatch per day (no restart chain; may hit 8 h wall before 10800 s)
