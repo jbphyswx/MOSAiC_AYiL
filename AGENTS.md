@@ -145,6 +145,7 @@ Report failures honestly. After substantive script/python changes, run the relev
 | `xtime` / scm_in time decode | `scm_in.nc` may need `decode_times=False` for inspection |
 | Slurm `8` concurrent tasks | **Removed** as default; was an arbitrary throttle, not a Caltech limit |
 | Run dir ~80 GiB but Zarr ~3 GiB | Old runs with Zenodo `trestart=1800` wrote `initd*`/`inits*`; delete after `.ayil_complete` or re-`prepare_case` + `--force`. New runs omit them. |
+| `curl: (60) SSL certificate problem` on fetch | Conda `base` curl often has no CA store on HPC. `export CURL_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt` or `conda deactivate` before `fetch_zenodo_inputs.sh`. Script prefers `/usr/bin/curl`. |
 
 ## Self-correction
 

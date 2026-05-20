@@ -36,19 +36,92 @@ ayil_zenodo_bundle_ready() {
   [[ -f "${AYIL_ZENODO_MARKER}" ]] && ayil_day_inputs_ready "20200720"
 }
 
+# Conda/base curl often lacks CA certs on HPC; prefer system curl and a known CA bundle.
+_ayil_setup_curl_ca_bundle() {
+  if [[ -n "${CURL_CA_BUNDLE:-}" && -f "${CURL_CA_BUNDLE}" ]]; then
+    return 0
+  fi
+  if [[ -n "${SSL_CERT_FILE:-}" && -f "${SSL_CERT_FILE}" ]]; then
+    export CURL_CA_BUNDLE="${SSL_CERT_FILE}"
+    return 0
+  fi
+  local candidate
+  for candidate in \
+    /etc/pki/tls/certs/ca-bundle.crt \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/ssl/ca-bundle.pem \
+    /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem; do
+    if [[ -f "${candidate}" ]]; then
+      export CURL_CA_BUNDLE="${candidate}"
+      _ayil_log "Using CA bundle: ${CURL_CA_BUNDLE}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+_ayil_curl_bin() {
+  local c p
+  for c in /usr/bin/curl; do
+    if [[ -x "${c}" ]]; then
+      echo "${c}"
+      return 0
+    fi
+  done
+  p="$(command -v curl 2>/dev/null || true)"
+  if [[ -n "${p}" ]]; then
+    if [[ -n "${CONDA_PREFIX:-}" && "${p}" == "${CONDA_PREFIX}/bin/curl" ]]; then
+      _ayil_log "Skipping conda curl (${p}); use system curl or set CURL_CA_BUNDLE"
+    else
+      echo "${p}"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+_ayil_wget_bin() {
+  local c p
+  for c in /usr/bin/wget; do
+    if [[ -x "${c}" ]]; then
+      echo "${c}"
+      return 0
+    fi
+  done
+  p="$(command -v wget 2>/dev/null || true)"
+  if [[ -n "${p}" ]]; then
+    echo "${p}"
+    return 0
+  fi
+  return 1
+}
+
 _ayil_download_url() {
   local dest="$1"
   local url="$2"
   mkdir -p "$(dirname "${dest}")"
-  if command -v curl &>/dev/null; then
-    /usr/bin/curl -fL --retry 3 --retry-delay 5 -C - -o "${dest}" "${url}"
-    return
+
+  local curl_bin wget_bin
+  if curl_bin="$(_ayil_curl_bin)"; then
+    _ayil_setup_curl_ca_bundle || true
+    _ayil_log "Download via curl: ${curl_bin}"
+    if "${curl_bin}" -fL --retry 3 --retry-delay 5 -C - -o "${dest}" "${url}"; then
+      return 0
+    fi
+    _ayil_log "curl failed; trying wget if available"
   fi
-  if command -v wget &>/dev/null; then
-    /usr/bin/wget -c -O "${dest}" "${url}"
-    return
+
+  if wget_bin="$(_ayil_wget_bin)"; then
+    _ayil_log "Download via wget: ${wget_bin}"
+    if "${wget_bin}" -c -O "${dest}" "${url}"; then
+      return 0
+    fi
   fi
-  echo "ERROR: need curl or wget to download Zenodo inputs" >&2
+
+  echo "ERROR: Zenodo download failed (often SSL CA with conda base curl on HPC)." >&2
+  echo "  Try: export CURL_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt" >&2
+  echo "  Or:  conda deactivate && ./scripts/fetch_zenodo_inputs.sh" >&2
+  echo "  Or:  module load curl  (if your site provides it)" >&2
   return 1
 }
 

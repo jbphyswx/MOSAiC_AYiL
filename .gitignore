@@ -1,5 +1,7 @@
-# Zenodo input cache (full bundle downloaded on first run)
+# Zenodo input cache and install marker (written by fetch_zenodo_inputs / prepare_case)
 .cache/
+.zenodo_bundle_installed
+ayil_config_input_results/.zenodo_bundle_installed
 
 # Pipeline artifacts (see scripts/clean.sh)
 # local directory version and symlink version
