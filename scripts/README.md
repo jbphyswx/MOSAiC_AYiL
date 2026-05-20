@@ -31,7 +31,8 @@ cp scripts/env.example scripts/env.local
 | `bootstrap_build_tree.sh` | Fix Zenodo-minimal tree before CMake |
 | `build_dales.sh` | Compile `dales4` |
 | `check_prerequisites.sh` | Pre-flight dependency check |
-| `prepare_case.sh YYYYMMDD [RUN_DIR]` | Copy inputs + link `scm_in.nc`; sets `trestart = -1` (no `initd*`/`inits*`) |
+| `prepare_case.sh YYYYMMDD [RUN_DIR]` | Fetch Zenodo inputs if missing; copy + link `scm_in.nc`; `trestart = -1` |
+| `fetch_zenodo_inputs.sh` | Optional prefetch of Zenodo zip; adds missing artifacts only (`rsync --ignore-existing`) |
 | `run_case.sh YYYYMMDD [NPROC] [RUN_DIR]` | Full MPI simulation (single day) |
 | **`run_local.sh`** | **Local workstation: progress logs, skip-complete, interrupts** |
 | `diagnose_mpi.sh` | MPI paths, slot limits, recommended `DALES_NPROC` |
@@ -153,7 +154,7 @@ sbatch --ntasks=40 --time=08:00:00 --mem=128G \
 |------|------------|
 | `dales.log` | DALES MPI (`run_local.sh`, `run_slurm_day.sh`) |
 | `progress.log` | `run_local.sh` progress monitor |
-| `slurm.out` / `slurm.err` | Slurm job wrapper (`slurm_submit.sh --separate` or array tee) |
+| `slurm.out` | Slurm job wrapper stdout + stderr (merged) |
 | `convert.log` | `python -m ayil.convert` |
 | `smoke.log` | `smoke_test.sh` |
 

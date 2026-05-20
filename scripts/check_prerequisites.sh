@@ -64,7 +64,7 @@ done
 if [[ -d "${AYIL_INPUTS}/20200720" ]]; then
   echo "OK  sample case ${AYIL_INPUTS}/20200720"
 else
-  echo "WARN sample case 20200720 not found (unzip Zenodo ayil_config_input_results.zip)" >&2
+  echo "WARN sample case 20200720 not found (runs auto-fetch via prepare_case, or ./scripts/fetch_zenodo_inputs.sh)" >&2
 fi
 
 echo ""

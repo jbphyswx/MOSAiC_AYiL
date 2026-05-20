@@ -1,3 +1,6 @@
+# Zenodo input cache (full bundle downloaded on first run)
+.cache/
+
 # Pipeline artifacts (see scripts/clean.sh)
 # local directory version and symlink version
 runs/ 

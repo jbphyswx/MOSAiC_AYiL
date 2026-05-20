@@ -159,9 +159,11 @@ submit_one() {
   local date="$1"
   local run_dir="${AYIL_RUNS}/${date}"
   ayil_ensure_run_logs "${run_dir}"
+  local slurm_log
+  slurm_log="$(ayil_slurm_log_out "${run_dir}")"
   sbatch "${SBATCH_OPTS[@]}" \
-    --output="$(ayil_slurm_log_out "${run_dir}")" \
-    --error="$(ayil_slurm_log_err "${run_dir}")" \
+    --output="${slurm_log}" \
+    --error="${slurm_log}" \
     --export="${EXPORT_BASE},DATE=${date}" \
     "${SLURM_SCRIPT}"
 }
@@ -192,5 +194,5 @@ else
   log_msg "Monitor: squeue -u \$USER   Cancel: scancel ${jid%% *}"
 fi
 
-log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,slurm.err,dales.log}"
+log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,dales.log}"
 log_msg "Slurm cluster copy (arrays): ${AYIL_SLURM_LOG_DIR}/"

@@ -3,8 +3,7 @@
 #
 #   dales.log      DALES MPI stdout/stderr (namoptions run)
 #   progress.log   Local run_local.sh progress lines
-#   slurm.out      Slurm job stdout (batch wrapper + echoes)
-#   slurm.err      Slurm job stderr
+#   slurm.out      Slurm job stdout + stderr (single file)
 #   convert.log    python -m ayil.convert
 #   smoke.log      smoke_test.sh
 #
@@ -31,8 +30,9 @@ ayil_slurm_log_out() {
   echo "$(ayil_run_logs_dir "$1")/slurm.out"
 }
 
+# Deprecated name: stderr is merged into slurm.out.
 ayil_slurm_log_err() {
-  echo "$(ayil_run_logs_dir "$1")/slurm.err"
+  ayil_slurm_log_out "$1"
 }
 
 ayil_convert_log() {
@@ -63,9 +63,8 @@ ayil_clean_run_outputs() {
 ayil_slurm_tee_to_run_logs() {
   local run_dir="$1"
   ayil_ensure_run_logs "${run_dir}"
-  local out err
+  local out
   out="$(ayil_slurm_log_out "${run_dir}")"
-  err="$(ayil_slurm_log_err "${run_dir}")"
   # Array jobs: SBATCH writes to runs/slurm_logs/; tee copies into this run's logs/.
-  exec > >(tee -a "${out}") 2> >(tee -a "${err}" >&2)
+  exec > >(tee -a "${out}") 2>&1
 }

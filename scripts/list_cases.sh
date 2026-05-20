@@ -31,4 +31,4 @@ done
 echo ""
 echo "States: missing | prepared | running | interrupted | failed | complete"
 echo "Complete runs have ${AYIL_STATUS_COMPLETE} and are skipped by run_local.sh"
-echo "Logs (when present): runs/YYYYMMDD/logs/{dales.log,progress.log,slurm.out,convert.log}"
+echo "Logs (when present): runs/YYYYMMDD/logs/{dales.log,progress.log,slurm.out,convert.log}  (Slurm stderr in slurm.out)"

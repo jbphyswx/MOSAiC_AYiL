@@ -33,13 +33,15 @@ Optional site config:
 cp scripts/env.example scripts/env.local   # edit modules, paths, DALES_NPROC
 ```
 
+**Inputs on a fresh clone:** Git tracks **`ayil_config_input_results/*/namoptions`** (pipeline settings such as `trestart = -1`). Large Zenodo artifacts (NetCDF, `prof.inp.*`, `*.001`, …) are not in git. The first `prepare_case` / run downloads [Zenodo `ayil_config_input_results.zip`](https://zenodo.org/records/10491362/files/ayil_config_input_results.zip) (~870 MiB) and **adds only missing files** (`rsync --ignore-existing` — it does not overwrite tracked `namoptions`). Prefetch: `./scripts/fetch_zenodo_inputs.sh`.
+
 ## Repository layout
 
 | Path | Role |
 |------|------|
 | `scripts/` | **Canonical pipeline** (build, prepare, run, smoke test, Slurm example) |
 | `dales_ayil/` | AYIL DALES source + committed CMake bootstrap files |
-| `ayil_config_input_results/YYYYMMDD/` | Per-day inputs (and Zenodo profile outputs) |
+| `ayil_config_input_results/YYYYMMDD/` | `namoptions` in git; Zenodo artifacts auto-downloaded on first run |
 | `runs/` | Simulation working directories (created by scripts; gitignored) |
 
 ## Run simulations locally (no Slurm)

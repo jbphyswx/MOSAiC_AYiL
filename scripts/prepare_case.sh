@@ -11,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 # shellcheck source=lib/namoptions_patch.sh
 source "${SCRIPT_DIR}/lib/namoptions_patch.sh"
+# shellcheck source=lib/zenodo_inputs.sh
+source "${SCRIPT_DIR}/lib/zenodo_inputs.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 YYYYMMDD [RUN_DIR]" >&2
@@ -18,13 +20,10 @@ if [[ $# -lt 1 ]]; then
 fi
 
 DATE="$1"
-INPUT_DIR="${AYIL_INPUTS}/${DATE}"
 RUN_DIR="${2:-${AYIL_RUNS}/${DATE}}"
 
-if [[ ! -d "${INPUT_DIR}" ]]; then
-  echo "ERROR: no input folder ${INPUT_DIR}" >&2
-  exit 1
-fi
+ayil_ensure_day_inputs "${DATE}"
+INPUT_DIR="${AYIL_INPUTS}/${DATE}"
 
 mkdir -p "${RUN_DIR}"
 

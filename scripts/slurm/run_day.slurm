@@ -5,9 +5,9 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
 #SBATCH --mem=128G
-# Cluster copy of stdout/stderr (canonical per-day logs: runs/YYYYMMDD/logs/slurm.out).
+# Cluster copy (stdout + stderr merged). Canonical per-day: runs/YYYYMMDD/logs/slurm.out
 #SBATCH --output=runs/slurm_logs/%x-%A_%a.out
-#SBATCH --error=runs/slurm_logs/%x-%A_%a.err
+#SBATCH --error=runs/slurm_logs/%x-%A_%a.out
 #
 # Run one MOSAiC day, or one day per array task (see scripts/slurm_submit.sh).
 # SBATCH lines above are defaults; slurm_submit.sh overrides them via sbatch CLI.

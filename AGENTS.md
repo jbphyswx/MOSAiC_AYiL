@@ -12,7 +12,7 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
 | `scripts/lib/` | Shared bash (`run_status.sh`, `mpi_env.sh`, `slurm_defaults.sh`, `pending_dates.sh`) |
 | `scripts/slurm/run_day.slurm` | Slurm job body (one day or one array task) |
 | `dales_ayil/` | AYIL DALES Fortran source; `build/src/dales4` after compile |
-| `ayil_config_input_results/YYYYMMDD/` | Per-day inputs + Zenodo artifacts (`namoptions`, `scm_in.*.nc`, …) |
+| `ayil_config_input_results/YYYYMMDD/` | **`namoptions` tracked in git** (edited pipeline settings). Large files (`scm_in.*.nc`, `prof.inp.*`, `*.001`, …) from [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362) on first `prepare_case`; install uses `rsync --ignore-existing` so Zenodo does not clobber existing/tracked files. Cache: `.cache/zenodo/`. |
 | `runs/YYYYMMDD/` | Run working dirs (gitignored); outputs + status marker files |
 | `python/ayil/` | Merge fielddump tiles → Zarr (`convert`, `fielddump`, `zarr_store`) |
 | `test/` | Bash unit/integration tests (`./test/run_tests.sh`) |
@@ -92,7 +92,7 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 ```
 
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
-- Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,slurm.err,dales.log,convert.log}`. Array cluster copy: `runs/slurm_logs/`. Date list: `runs/.slurm_pending_dates`.
+- Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,dales.log,convert.log}` (Slurm stderr merged into `slurm.out`). Array cluster copy: `runs/slurm_logs/`. Date list: `runs/.slurm_pending_dates`.
 - **Per-job defaults** in `scripts/lib/slurm_defaults.sh` are documented as aligned with [Caltech Resnick HPC](https://www.hpc.caltech.edu/resources) **resource shape** (1 node, 40 tasks, 128G, 8h) — override via `env.local` on other clusters.
 - **No default array concurrency cap.** Slurm schedules array tasks as partition/QOS/limits allow. Set `AYIL_SLURM_ARRAY_MAX` only when an explicit `--array=0-N%M` throttle is desired.
 - Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
