@@ -36,6 +36,8 @@ source "${SCRIPT_DIR}/lib/slurm_defaults.sh"
 source "${SCRIPT_DIR}/lib/logging_paths.sh"
 # shellcheck source=lib/chunk_run.sh
 source "${SCRIPT_DIR}/lib/chunk_run.sh"
+# shellcheck source=lib/zenodo_inputs.sh
+source "${SCRIPT_DIR}/lib/zenodo_inputs.sh"
 
 FORCE=0
 DRY_RUN=0
@@ -67,11 +69,6 @@ while [[ $# -gt 0 ]]; do
     *) DATES+=("$1"); MODE="explicit"; shift ;;
   esac
 done
-
-if ! command -v sbatch &>/dev/null; then
-  echo "ERROR: sbatch not found (not on a Slurm cluster?)" >&2
-  exit 1
-fi
 
 if [[ "${MODE}" == "pending" ]]; then
   ayil_collect_submit_dates "${FORCE}" pending
@@ -110,20 +107,48 @@ log_msg() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
+# Reject dates that are not in ayil_config_input_results (calendar YYYYMMDD ≠ AYIL day).
+INVALID_INPUTS=()
+VALID_SUBMIT=()
+for date in "${TO_SUBMIT[@]}"; do
+  if ayil_day_inputs_ready "${date}"; then
+    VALID_SUBMIT+=("${date}")
+  else
+    INVALID_INPUTS+=("${date}")
+  fi
+done
+TO_SUBMIT=("${VALID_SUBMIT[@]}")
+
 if [[ "${MODE}" == "status" ]]; then
-  printf "%-12s %-12s %s\n" "DATE" "STATE" "SUBMIT?"
+  printf "%-12s %-10s %-12s %s\n" "DATE" "INPUTS" "STATE" "SUBMIT?"
   for date in "${AYIL_PENDING_DATES[@]}"; do
     run_dir="${AYIL_RUNS}/${date}"
     state="$(ayil_run_state "${run_dir}")"
+    inputs="no"
+    if ayil_day_inputs_ready "${date}"; then
+      inputs="yes"
+    fi
     sub="no"
-    if ayil_should_submit_date "${run_dir}" "${FORCE}"; then
+    if [[ "${inputs}" == "yes" ]] && ayil_should_submit_date "${run_dir}" "${FORCE}"; then
       sub="yes"
     fi
-    printf "%-12s %-12s %s\n" "${date}" "${state}" "${sub}"
+    printf "%-12s %-10s %-12s %s\n" "${date}" "${inputs}" "${state}" "${sub}"
   done
   echo ""
-  echo "Would submit: ${#TO_SUBMIT[@]}  Would skip: ${#SKIPPED[@]}"
+  echo "Would submit: ${#TO_SUBMIT[@]}  Would skip: ${#SKIPPED[@]}  No inputs: ${#INVALID_INPUTS[@]}"
   exit 0
+fi
+
+if ((${#INVALID_INPUTS[@]} > 0)); then
+  log_msg "ERROR: ${#INVALID_INPUTS[@]} date(s) are not MOSAiC AYIL input days under ${AYIL_INPUTS}:"
+  for date in "${INVALID_INPUTS[@]}"; do
+    log_msg "  NO_INPUTS ${date}  (not in Zenodo bundle — do not use arbitrary calendar dates)"
+  done
+  log_msg "Fix the date list or use: ./scripts/slurm_submit.sh --pending --dry-run"
+  if ((${#TO_SUBMIT[@]} == 0)); then
+    exit 1
+  fi
+  log_msg "Continuing with ${#TO_SUBMIT[@]} valid day(s) only."
 fi
 
 if ((${#SKIPPED[@]} > 0)); then
@@ -164,7 +189,7 @@ else
 fi
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-  log_msg "DRY-RUN: would submit with:"
+  log_msg "DRY-RUN (no sbatch): would submit with:"
   printf '  %s\n' "${SBATCH_OPTS[@]}"
   for date in "${TO_SUBMIT[@]}"; do
     if [[ "${CHUNKED}" -eq 1 ]]; then
@@ -182,6 +207,11 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     fi
   done
   exit 0
+fi
+
+if ! command -v sbatch &>/dev/null; then
+  echo "ERROR: sbatch not found (not on a Slurm cluster?)" >&2
+  exit 1
 fi
 
 if [[ ! -x "${DALES_BIN}" && "${AYIL_SLURM_BUILD:-0}" != "1" ]]; then

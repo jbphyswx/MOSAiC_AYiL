@@ -84,13 +84,8 @@ if (( ok == 0 )); then
 fi
 
 export AYIL_USE_RESTART_CHUNKS="${CHUNK_MODE}"
+# Output wipe runs in run_day.slurm before slurm.out tee (not here — cleaning here deleted logs mid-job).
 "${SCRIPT_DIR}/prepare_case.sh" "${DATE}" "${RUN_DIR}"
-
-if ayil_should_clean_run_outputs "${RUN_DIR}" "${FORCE}" "${CHUNK_MODE}" "${CHUNK_IDX}"; then
-  echo "Cleaning prior outputs in ${RUN_DIR} (chunk=${CHUNK_IDX}, force=${FORCE})"
-  ayil_clean_run_outputs "${RUN_DIR}"
-  ayil_clear_chunk_markers "${RUN_DIR}"
-fi
 
 NAMOPTIONS="${RUN_DIR}/namoptions"
 if [[ "${CHUNK_MODE}" == "1" ]]; then

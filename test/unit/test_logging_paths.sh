@@ -18,4 +18,15 @@ rm -rf "${RUN}"
 ayil_ensure_run_logs "${RUN}"
 assert_true "[[ -d \"${RUN}/logs\" ]]" "ensure_run_logs creates logs/"
 
+echo "x" > "${RUN}/logs/slurm.out"
+echo "y" > "${RUN}/logs/dales.log"
+touch "${RUN}/.ayil_failed"
+# shellcheck source=../../scripts/lib/run_status.sh
+source "${REPO_ROOT}/scripts/lib/run_status.sh"
+ayil_clean_run_outputs "${RUN}"
+assert_true "[[ -f \"${RUN}/logs/slurm.out\" ]]" "clean keeps slurm.out"
+assert_true "[[ ! -f \"${RUN}/logs/dales.log\" ]]" "clean removes dales.log"
+assert_true "[[ ! -f \"${RUN}/.ayil_failed\" ]]" "clean removes status markers"
+rm -rf "${RUN}"
+
 test_summary

@@ -43,7 +43,8 @@ ayil_smoke_log() {
   echo "$(ayil_run_logs_dir "$1")/smoke.log"
 }
 
-# Remove generated outputs and logs (keeps inputs, namoptions, prof.inp, status markers cleared separately).
+# Remove generated simulation outputs (keeps inputs, namoptions, prof.inp).
+# Does not delete logs/slurm.out — that file is written by the active Slurm job via tee.
 ayil_clean_run_outputs() {
   local run_dir="$1"
   # shellcheck source=run_status.sh
@@ -55,17 +56,30 @@ ayil_clean_run_outputs() {
     -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" -o \
     -name '.ayil_chunk_*_complete' \
     \) -delete 2>/dev/null || true
-  rm -rf "$(ayil_run_logs_dir "${run_dir}")"
+  # Simulation logs only (never rm -rf logs/ — that deletes slurm.out mid-job).
+  local logs_dir
+  logs_dir="$(ayil_run_logs_dir "${run_dir}")"
+  if [[ -d "${logs_dir}" ]]; then
+    rm -f "${logs_dir}/dales.log" "${logs_dir}/progress.log" "${logs_dir}/convert.log" \
+      "${logs_dir}/smoke.log" 2>/dev/null || true
+  fi
   # Legacy logs at run root (before logs/ layout).
   find "${run_dir}" -maxdepth 1 -name '*.log' -delete 2>/dev/null || true
 }
 
 # Send all further bash output to runs/YYYYMMDD/logs/slurm.out.
-# (#SBATCH --output=/dev/null only disables Slurm's *second* copy; this tee is the real log.)
+# Also copies to runs/.slurm_job_logs/job_<id>.out when SLURM_JOB_ID is set (survives empty logs/ bugs).
+# (#SBATCH --output=/dev/null only disables Slurm's spool copy; this tee is the primary log.)
 ayil_slurm_tee_to_run_logs() {
   local run_dir="$1"
   ayil_ensure_run_logs "${run_dir}"
-  local out
+  local out job_log
   out="$(ayil_slurm_log_out "${run_dir}")"
-  exec > >(tee -a "${out}") 2>&1
+  if [[ -n "${SLURM_JOB_ID:-}" && -n "${MOSAiC_AYIL_ROOT:-}" ]]; then
+    job_log="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}/.slurm_job_logs/job_${SLURM_JOB_ID}.out"
+    mkdir -p "$(dirname "${job_log}")"
+    exec > >(tee -a "${out}" "${job_log}") 2>&1
+  else
+    exec > >(tee -a "${out}") 2>&1
+  fi
 }

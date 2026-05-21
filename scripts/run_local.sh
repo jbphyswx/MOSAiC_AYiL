@@ -33,6 +33,8 @@ source "${SCRIPT_DIR}/lib/mpi_slots.sh"
 source "${SCRIPT_DIR}/lib/logging_paths.sh"
 # shellcheck source=lib/chunk_run.sh
 source "${SCRIPT_DIR}/lib/chunk_run.sh"
+# shellcheck source=lib/zenodo_inputs.sh
+source "${SCRIPT_DIR}/lib/zenodo_inputs.sh"
 
 NPROC_REQUESTED="${DALES_NPROC:-64}"
 NPROC="${NPROC_REQUESTED}"
@@ -103,6 +105,28 @@ if [[ ${#DATES[@]} -eq 0 ]]; then
   usage 1
 fi
 
+# Reject YYYYMMDD that are not real AYIL Zenodo days (calendar date ≠ simulation day).
+FILTERED_DATES=()
+NO_INPUTS=()
+for DATE in "${DATES[@]}"; do
+  if ayil_day_inputs_ready "${DATE}"; then
+    FILTERED_DATES+=("${DATE}")
+  else
+    NO_INPUTS+=("${DATE}")
+  fi
+done
+if ((${#NO_INPUTS[@]} > 0)); then
+  for DATE in "${NO_INPUTS[@]}"; do
+    echo "ERROR: ${DATE} is not an AYIL input day under ${AYIL_INPUTS} (not in Zenodo bundle)" >&2
+  done
+  echo "Use ./scripts/list_input_dates.sh or ./scripts/slurm_submit.sh --status --pending" >&2
+fi
+DATES=("${FILTERED_DATES[@]}")
+if [[ ${#DATES[@]} -eq 0 ]]; then
+  echo "ERROR: no valid dates to process." >&2
+  exit 1
+fi
+
 if [[ ! -x "${DALES_BIN}" && "${PREPARE_ONLY}" -eq 0 && "${MODE}" != "status" ]]; then
   echo "ERROR: ${DALES_BIN} missing. Run ./scripts/build_dales.sh" >&2
   exit 1
@@ -156,8 +180,17 @@ run_one_date() {
   state="$(ayil_run_state "${RUN_DIR}")"
 
   if [[ "${MODE}" == "status" ]]; then
-    log_msg "${DATE}: ${state}  $( [[ -d "${RUN_DIR}" ]] && du -sh "${RUN_DIR}" | awk '{print $1}' || echo '-' )"
+    local inputs="no"
+    if ayil_day_inputs_ready "${DATE}"; then
+      inputs="yes"
+    fi
+    log_msg "${DATE}: inputs=${inputs} state=${state}  $( [[ -d "${RUN_DIR}" ]] && du -sh "${RUN_DIR}" | awk '{print $1}' || echo '-' )"
     return 0
+  fi
+
+  if ! ayil_day_inputs_ready "${DATE}"; then
+    log_msg "ERROR: ${DATE} is not an AYIL input day under ${AYIL_INPUTS}"
+    return 1
   fi
 
   if [[ "${state}" == "complete" && "${FORCE}" -eq 0 ]]; then

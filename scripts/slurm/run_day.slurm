@@ -59,8 +59,16 @@ fi
 RUN_DIR="${AYIL_RUNS:-${REPO_ROOT}/runs}/${DATE}"
 # shellcheck source=../lib/logging_paths.sh
 source "${REPO_ROOT}/scripts/lib/logging_paths.sh"
+# shellcheck source=../lib/chunk_run.sh
+source "${REPO_ROOT}/scripts/lib/chunk_run.sh"
 ayil_ensure_run_logs "${RUN_DIR}"
-# Per-day log file (not /dev/null): redirect bash stdout/stderr before config/modules.
+# Wipe prior sim outputs before tee (must not run ayil_clean_run_outputs after tee starts).
+CHUNK_IDX="${AYIL_CHUNK_INDEX:-0}"
+if ayil_should_clean_run_outputs "${RUN_DIR}" "${AYIL_FORCE:-0}" "${AYIL_USE_RESTART_CHUNKS:-1}" "${CHUNK_IDX}"; then
+  ayil_clean_run_outputs "${RUN_DIR}"
+  ayil_clear_chunk_markers "${RUN_DIR}"
+fi
+# Per-day log (+ job-id copy under runs/.slurm_job_logs/; #SBATCH --output=/dev/null).
 ayil_slurm_tee_to_run_logs "${RUN_DIR}"
 echo "Slurm job_id=${SLURM_JOB_ID:-?} array_task=${SLURM_ARRAY_TASK_ID:-?} DATE=${DATE} chunk=${AYIL_CHUNK_INDEX:-?}/${AYIL_N_CHUNKS:-?}"
 echo "Logs: $(ayil_slurm_log_out "${RUN_DIR}")  $(ayil_progress_log "${RUN_DIR}")  $(ayil_dales_log "${RUN_DIR}")"
