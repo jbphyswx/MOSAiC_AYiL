@@ -11,7 +11,9 @@ source "${REPO_ROOT}/scripts/lib/namoptions_patch.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
-n="$(ayil_n_chunks 10800 600)"
+CHUNK_SEC=600
+DAY_SEC=10800
+n="$(ayil_n_chunks "${DAY_SEC}" "${CHUNK_SEC}")"
 [[ "${n}" == "18" ]] || {
   echo "FAIL: expected 18 chunks (600s), got ${n}" >&2
   exit 1
@@ -27,7 +29,7 @@ cat > "${TMP}/namoptions" <<'EOF'
 /
 EOF
 
-ayil_apply_chunk_namoptions "${TMP}/namoptions" 0 18
+ayil_apply_chunk_namoptions "${TMP}/namoptions" 0 18 "${CHUNK_SEC}" "${DAY_SEC}"
 grep -q 'runtime = 600' "${TMP}/namoptions" || {
   echo "FAIL: chunk 0 runtime" >&2
   exit 1
@@ -41,17 +43,17 @@ grep -q 'trestart = 0' "${TMP}/namoptions" || {
   exit 1
 }
 
-ayil_apply_chunk_namoptions "${TMP}/namoptions" 2 18
+ayil_apply_chunk_namoptions "${TMP}/namoptions" 2 18 "${CHUNK_SEC}" "${DAY_SEC}"
 grep -q 'lwarmstart = .true.' "${TMP}/namoptions" || {
   echo "FAIL: chunk 2 warm start" >&2
   exit 1
 }
-grep -q "startfile = 'initdlatestx000y000.001'" "${TMP}/namoptions" || {
+grep -q "startfile = 'initdlatestm00000001.001'" "${TMP}/namoptions" || {
   echo "FAIL: chunk 2 startfile" >&2
   exit 1
 }
 
-ayil_apply_chunk_namoptions "${TMP}/namoptions" 17 18
+ayil_apply_chunk_namoptions "${TMP}/namoptions" 17 18 "${CHUNK_SEC}" "${DAY_SEC}"
 grep -q 'trestart = -1' "${TMP}/namoptions" || {
   echo "FAIL: last chunk no restart write" >&2
   exit 1

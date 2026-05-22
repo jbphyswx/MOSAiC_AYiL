@@ -73,8 +73,14 @@ Interactive shells without MPI on PATH: `source ./scripts/setup_env.sh`
 
 ```bash
 ./test/run_tests.sh           # unit + integration (no DALES compile required)
-./test/run_tests.sh --with-dales   # optional smoke test if dales4 is built
+./test/run_tests.sh --with-dales   # smoke + two-chunk warm-start if dales4 is built
 ```
+
+### Chunked restart naming (Slurm only)
+
+Zenodo `namoptions` use **cold start** (`lwarmstart = .false.`, `startfile = 'initd002h00mx000y000.001'`, `trestart = -1`). Chunked Slurm is **new orchestration**: after each segment DALES writes `initd000h05m{cmyid}.001` and copies to **`initdlatestm{cmyid}.001`** (`modstartup.f90`: `linkname(6:11)="latest"`, char 12 stays `m`). Warm chunks must use that pattern in `startfile` (chars 13–20 are replaced per rank), **not** a Zenodo string with `latest` swapped into the hour/min fields.
+
+Offline checks: `test/unit/test_restart_naming.sh`, `test/integration/test_chunk_restart_handoff.sh`. With `dales4` built: `scripts/chunk_warmstart_smoke_test.sh`.
 
 ## Slurm (HPC batch)
 

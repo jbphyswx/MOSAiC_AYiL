@@ -46,6 +46,11 @@ if (( WITH_DALES == 1 )); then
   else
     test_fail "smoke_test.sh"
   fi
+  if "${REPO_ROOT}/scripts/chunk_warmstart_smoke_test.sh" 20200720 8 120; then
+    test_pass
+  else
+    test_fail "chunk_warmstart_smoke_test.sh"
+  fi
   else
     test_skip "dales4 not built; run ./scripts/build_dales.sh first"
   fi
