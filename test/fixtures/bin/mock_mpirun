@@ -20,4 +20,5 @@ if (( nproc > max )); then
   echo "mock_mpirun: not enough slots (${nproc} > ${max})" >&2
   exit 1
 fi
+export AYIL_MOCK_NPROC="${nproc}"
 exec "${args[@]}"

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Stub dales4 for the test suite: no LES, no MPI domain, no NetCDF physics.
+# Exercises the same contract run_slurm_day.sh expects (log sim time, restart files).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/run_status.sh
+source "${REPO_ROOT}/scripts/lib/run_status.sh"
+# shellcheck source=../../../scripts/lib/restart_naming.sh
+source "${REPO_ROOT}/scripts/lib/restart_naming.sh"
+
+NAMOPTIONS="${1:-namoptions}"
+if [[ ! -f "${NAMOPTIONS}" ]]; then
+  echo "mock_dales4: missing ${NAMOPTIONS}" >&2
+  exit 1
+fi
+
+RUNTIME="$(ayil_read_runtime "${NAMOPTIONS}")"
+[[ -n "${RUNTIME}" ]] || {
+  echo "mock_dales4: could not read runtime from ${NAMOPTIONS}" >&2
+  exit 1
+}
+
+NPROC="${AYIL_MOCK_NPROC:-4}"
+LWARM=0
+if grep -qE '^[[:space:]]*lwarmstart[[:space:]]*=[[:space:]]*\.true\.' "${NAMOPTIONS}"; then
+  LWARM=1
+fi
+
+TRESTART=-1
+if grep -qE '^[[:space:]]*trestart[[:space:]]*=[[:space:]]*0' "${NAMOPTIONS}"; then
+  TRESTART=0
+fi
+
+STARTFILE=""
+if (( LWARM == 1 )); then
+  STARTFILE="$(grep -E '^[[:space:]]*startfile' "${NAMOPTIONS}" | sed -E "s/.*'([^']+)'.*/\1/" | head -1)"
+  [[ -n "${STARTFILE}" ]] || {
+    echo "mock_dales4: warm start without startfile" >&2
+    exit 1
+  }
+  while read -r cid; do
+    path="$(ayil_dales_resolve_initd_startfile "${STARTFILE}" "${cid}")"
+    if [[ ! -f "${path}" ]]; then
+      echo "loading ${path}"
+      echo "Fortran runtime error: Cannot open file '${path}': No such file or directory" >&2
+      exit 2
+    fi
+  done < <(ayil_dales_cmyids_for_nproc "${NPROC}")
+fi
+
+echo "mock_dales4: Time of Simulation: ${RUNTIME} seconds (nproc=${NPROC} lwarm=${LWARM})"
+if (( TRESTART == 0 )); then
+  while read -r cid; do
+    lat="$(ayil_dales_latest_initd_name "${RUNTIME}" "${cid}" '001')"
+    timed="$(ayil_dales_timed_initd_name "${RUNTIME}" "${cid}" '001')"
+    : >"${timed}"
+    cp -f "${timed}" "${lat}"
+    echo "dump at time = ${RUNTIME}.0000000 unit = 99"
+  done < <(ayil_dales_cmyids_for_nproc "${NPROC}")
+fi
+
+exit 0

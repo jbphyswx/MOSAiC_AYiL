@@ -9,7 +9,7 @@ All build and run steps live here as version-controlled shell scripts. **Do not 
 cp scripts/env.example scripts/env.local
 # edit scripts/env.local (modules, NETCDF_INCLUDE, DALES_NPROC)
 
-# 2. Full verify + build + short smoke run (~2 min with 16 MPI tasks)
+# 2. Full verify + build + lightweight tests (mock LES; no full simulation)
 ./scripts/reproduce.sh
 ```
 
@@ -20,7 +20,7 @@ cp scripts/env.example scripts/env.local
 | 1 | `check_prerequisites.sh` | Checks `cmake`, `mpif90`, `mpirun`, `rsync`, NetCDF, repo layout |
 | 2 | `bootstrap_build_tree.sh` | Ensures `CMakeLists.txt`, `findnetcdf`, `cases/standard/moduser.f90` exist |
 | 3 | `build_dales.sh` | `cmake` + `make` → `dales_ayil/build/src/dales4` |
-| 4 | `smoke_test.sh` | Stages `runs/smoke_20200720/`, runs 120 s, checks log for time steps |
+| 4 | `./test/run_tests.sh` | Lightweight mock LES orchestration (default in `reproduce.sh`) |
 
 ## Script reference
 
@@ -42,7 +42,7 @@ cp scripts/env.example scripts/env.local
 | `run_batch.sh prepare\|run ...` | Many dates (serial; prefer Slurm on HPC) |
 | **`slurm_submit.sh`** | **Submit Slurm array or per-day jobs; skips complete days** |
 | `run_slurm_day.sh YYYYMMDD` | One day inside a batch job (status markers) |
-| `smoke_test.sh [DATE] [NPROC] [TIMEOUT]` | Short sanity run |
+| `manual/smoke_test.sh` | **Manual** real-MPI sanity (compute node only) |
 | `clean.sh build\|runs\|all` | Remove `dales_ayil/build` and/or `runs/` |
 | `reproduce.sh` | Canonical chain: check → bootstrap → build → smoke |
 | `slurm/run_day.slurm` | Slurm job body (single day or array task) |
@@ -73,14 +73,14 @@ Interactive shells without MPI on PATH: `source ./scripts/setup_env.sh`
 
 ```bash
 ./test/run_tests.sh           # unit + integration (no DALES compile required)
-./test/run_tests.sh --with-dales   # smoke + two-chunk warm-start if dales4 is built
+./test/run_tests.sh                # mock mpirun + mock_dales4 (CI / laptop / login)
 ```
 
 ### Chunked restart naming (Slurm only)
 
 Zenodo `namoptions` use **cold start** (`lwarmstart = .false.`, `startfile = 'initd002h00mx000y000.001'`, `trestart = -1`). Chunked Slurm is **new orchestration**: after each segment DALES writes `initd000h05m{cmyid}.001` and copies to **`initdlatestm{cmyid}.001`** (`modstartup.f90`: `linkname(6:11)="latest"`, char 12 stays `m`). Warm chunks must use that pattern in `startfile` (chars 13–20 are replaced per rank), **not** a Zenodo string with `latest` swapped into the hour/min fields.
 
-Offline checks: `test/unit/test_restart_naming.sh`, `test/integration/test_chunk_restart_handoff.sh`. With `dales4` built: `scripts/chunk_warmstart_smoke_test.sh`.
+Automated checks: `test_restart_naming.sh`, `test_chunk_restart_handoff.sh`, `test_chunk_orchestration_mock.sh`, `test_mock_dales4.sh`. Optional real MPI: `scripts/manual/`.
 
 ## Slurm (HPC batch)
 

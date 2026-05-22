@@ -131,7 +131,8 @@ After `.ayil_complete` exists for a day:
 ```bash
 ./test/run_tests.sh
 cd python && conda run -n MOSAiC_AYIL pytest -v
-./test/run_tests.sh --with-dales    # optional; needs built dales4
+./test/run_tests.sh                 # always mock_dales4 (CI / laptop / login safe)
+# Real LES only via scripts/manual/ on a compute node — never part of run_tests.sh
 ```
 
 Report failures honestly. After substantive script/python changes, run the relevant suite before claiming done.

@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Canonical entry point: check tools, bootstrap build tree, compile dales4, smoke test.
+# Canonical entry point: check tools, bootstrap build tree, compile dales4, run lightweight tests.
 #
-# Usage: ./scripts/reproduce.sh
-#
-# Override paths or rank count via scripts/env.local (see scripts/env.example).
+# Usage:
+#   ./scripts/reproduce.sh           # build + ./test/run_tests.sh (mock LES only)
+#   ./scripts/reproduce.sh --manual-smoke   # also run scripts/manual/smoke_test.sh on compute
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANUAL_SMOKE=0
+for arg in "$@"; do
+  case "${arg}" in
+    --manual-smoke) MANUAL_SMOKE=1 ;;
+    -h|--help)
+      echo "Usage: $0 [--manual-smoke]"
+      exit 0
+      ;;
+  esac
+done
 
 if [[ -f "${SCRIPT_DIR}/env.local" ]]; then
   # shellcheck source=/dev/null
@@ -25,13 +35,16 @@ echo "======== 3/4 build dales4 ========"
 "${SCRIPT_DIR}/build_dales.sh"
 
 echo ""
-echo "======== 4/4 smoke test ========"
-"${SCRIPT_DIR}/smoke_test.sh"
-
-echo ""
-echo "======== tests ========"
+echo "======== 4/4 lightweight tests (mock_dales4) ========"
 "${SCRIPT_DIR}/../test/run_tests.sh"
 
+if (( MANUAL_SMOKE == 1 )); then
+  echo ""
+  echo "======== optional manual LES smoke (compute node) ========"
+  bash "${SCRIPT_DIR}/manual/smoke_test.sh"
+fi
+
 echo ""
-echo "Reproduce pipeline completed successfully."
-echo "Next: ./scripts/run_local.sh 20200720   # or run_case.sh on Slurm"
+echo "Reproduce pipeline completed."
+echo "  Tests: mock orchestration only (safe for CI / login / laptop)."
+echo "  Real LES: scripts/manual/ on a compute node with ample memory."
