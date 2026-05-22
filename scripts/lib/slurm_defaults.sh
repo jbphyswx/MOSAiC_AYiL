@@ -18,8 +18,12 @@ if [[ -z "${AYIL_SLURM_MEM:-}" ]]; then
   export AYIL_SLURM_MEM="$(( AYIL_SLURM_NTASKS * AYIL_SLURM_MEM_PER_RANK_GIB + AYIL_SLURM_MEM_HEADROOM_GIB ))G"
 fi
 
-# Observed slow HPC rate ~1537 s sim in 7 h wall → ~16.4 s wall / s sim; default 17 + 15% headroom.
-export AYIL_SLURM_WALL_PER_SIM_SEC="${AYIL_SLURM_WALL_PER_SIM_SEC:-17}"
+# Wall/sim reference @ AYIL_SLURM_WALL_REF_NTASKS (default 64). Other rank counts are scaled
+# automatically unless AYIL_SLURM_WALL_PER_SIM_SEC is set in env.local (manual override).
+export AYIL_SLURM_WALL_REF_NTASKS="${AYIL_SLURM_WALL_REF_NTASKS:-64}"
+export AYIL_SLURM_WALL_REF_PER_SIM_SEC="${AYIL_SLURM_WALL_REF_PER_SIM_SEC:-17}"
+# Weak-scaling exponent: wall/sim ~ ref * (ref_ntasks/ntasks)^exp (0.55 fits 64→17, 32→~25).
+export AYIL_SLURM_WALL_NTASKS_EXP="${AYIL_SLURM_WALL_NTASKS_EXP:-0.55}"
 export AYIL_SLURM_WALL_HEADROOM_PCT="${AYIL_SLURM_WALL_HEADROOM_PCT:-15}"
 # Partition hard cap (8 h on expansion); computed wall is min(this, estimate).
 export AYIL_SLURM_WALL_MAX_SEC="${AYIL_SLURM_WALL_MAX_SEC:-28800}"
@@ -28,10 +32,86 @@ export AYIL_SLURM_WALL_MIN_SEC="${AYIL_SLURM_WALL_MIN_SEC:-1800}"
 # Sim seconds used for wall estimate (slurm_submit sets for --no-chunked).
 export AYIL_SLURM_WALL_SIM_SEC="${AYIL_SLURM_WALL_SIM_SEC:-${AYIL_CHUNK_SIM_SEC:-600}}"
 
+# Effective wall seconds per simulated second for current AYIL_SLURM_NTASKS.
+# Optional: runs/.ayil_wall_calibration from the last successful chunk on this cluster.
+ayil_slurm_effective_wall_per_sim_sec() {
+  if [[ -n "${AYIL_SLURM_WALL_PER_SIM_SEC:-}" ]]; then
+    echo "${AYIL_SLURM_WALL_PER_SIM_SEC}"
+    return 0
+  fi
+
+  local ntasks="${AYIL_SLURM_NTASKS:-64}"
+  local cal="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}/.ayil_wall_calibration"
+  if [[ -f "${cal}" ]]; then
+    # shellcheck source=/dev/null
+    source "${cal}"
+    if [[ -n "${AYIL_CALIB_WALL_PER_SIM_SEC:-}" && -n "${AYIL_CALIB_NTASKS:-}" ]]; then
+      if [[ "${ntasks}" == "${AYIL_CALIB_NTASKS}" ]]; then
+        echo "${AYIL_CALIB_WALL_PER_SIM_SEC}"
+        return 0
+      fi
+      awk -v ref="${AYIL_CALIB_WALL_PER_SIM_SEC}" -v refn="${AYIL_CALIB_NTASKS}" \
+        -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
+        'BEGIN {
+          if (n <= 0 || refn <= 0) exit 1
+          printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
+        }'
+      return 0
+    fi
+  fi
+
+  awk -v ref="${AYIL_SLURM_WALL_REF_PER_SIM_SEC}" -v refn="${AYIL_SLURM_WALL_REF_NTASKS}" \
+    -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
+    'BEGIN {
+      if (n <= 0 || refn <= 0) exit 1
+      printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
+    }'
+}
+
+# After a successful chunk, record measured wall/sim for this site (overrides formula next submit).
+ayil_slurm_record_wall_calibration() {
+  local run_dir="$1"
+  local log="$2"
+  local namoptions="${3:-${run_dir}/namoptions}"
+  local runs_root="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}"
+  local cal="${runs_root}/.ayil_wall_calibration"
+  # shellcheck source=run_status.sh
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_status.sh"
+  local marker="${run_dir}/${AYIL_STATUS_RUNNING}"
+
+  [[ -f "${marker}" ]] || return 0
+  local nproc started_utc runtime sim
+  nproc="$(grep -E '^nproc=' "${marker}" | cut -d= -f2-)"
+  started_utc="$(grep -E '^started_utc=' "${marker}" | cut -d= -f2-)"
+  runtime="$(ayil_read_runtime "${namoptions}")"
+  sim="$(ayil_last_sim_time "${log}")"
+  [[ -n "${nproc}" && -n "${started_utc}" && -n "${runtime}" && -n "${sim}" ]] || return 0
+  awk -v s="${sim}" -v r="${runtime}" 'BEGIN { exit (s >= r - 2.0) ? 0 : 1 }' || return 0
+
+  local start_epoch end_epoch wall_sec wall_per
+  start_epoch="$(date -u -d "${started_utc}" +%s 2>/dev/null || echo 0)"
+  end_epoch="$(date -u +%s)"
+  (( start_epoch > 0 && end_epoch > start_epoch )) || return 0
+  wall_sec=$(( end_epoch - start_epoch ))
+  wall_per="$(awk -v w="${wall_sec}" -v s="${sim}" 'BEGIN { if (s > 0) printf "%.0f", w / s + 0.5; else exit 1 }')"
+  [[ -n "${wall_per}" && "${wall_per}" -ge 1 ]] 2>/dev/null || return 0
+
+  mkdir -p "${runs_root}"
+  cat > "${cal}" <<EOF
+# Auto-written by MOSAiC_AYIL from last successful chunk (do not hand-edit unless needed).
+AYIL_CALIB_NTASKS=${nproc}
+AYIL_CALIB_WALL_PER_SIM_SEC=${wall_per}
+AYIL_CALIB_RECORDED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+AYIL_CALIB_SIM_SEC=${sim}
+AYIL_CALIB_WALL_SEC=${wall_sec}
+EOF
+}
+
 # Return HH:MM:00 for sbatch --time from simulated seconds in one job/chunk.
 ayil_slurm_compute_walltime() {
   local sim_sec="${1:-${AYIL_SLURM_WALL_SIM_SEC}}"
-  local wall_per_sim="${AYIL_SLURM_WALL_PER_SIM_SEC}"
+  local wall_per_sim
+  wall_per_sim="$(ayil_slurm_effective_wall_per_sim_sec)"
   local headroom_pct="${AYIL_SLURM_WALL_HEADROOM_PCT}"
   local max_sec="${AYIL_SLURM_WALL_MAX_SEC}"
   local min_sec="${AYIL_SLURM_WALL_MIN_SEC}"

@@ -176,7 +176,8 @@ fi
 
 ayil_slurm_sbatch_opts SBATCH_OPTS
 WALL_TIME="$(ayil_slurm_resolve_time)"
-log_msg "sbatch --time=${WALL_TIME} (sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s, wall/sim=${AYIL_SLURM_WALL_PER_SIM_SEC}, cap=${AYIL_SLURM_WALL_MAX_SEC}s)"
+WALL_PER_SIM="$(ayil_slurm_effective_wall_per_sim_sec)"
+log_msg "sbatch --time=${WALL_TIME} (sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s, ntasks=${AYIL_SLURM_NTASKS}, wall/sim=${WALL_PER_SIM}, cap=${AYIL_SLURM_WALL_MAX_SEC}s)"
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
 EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
 

@@ -70,6 +70,24 @@ if ayil_should_clean_run_outputs "${RUN_DIR}" "${AYIL_FORCE:-0}" "${AYIL_USE_RES
 fi
 # Per-day log (+ job-id copy under runs/.slurm_job_logs/; #SBATCH --output=/dev/null).
 ayil_slurm_tee_to_run_logs "${RUN_DIR}"
+
+# Slurm TIMEOUT/SIGKILL often kills the job before run_slurm_day.sh prints FAIL; record best-effort status.
+ayil_slurm_job_exit_trap() {
+  local ec=$?
+  if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    # shellcheck source=../lib/run_status.sh
+    source "${REPO_ROOT}/scripts/lib/run_status.sh"
+    if [[ ${ec} -ne 0 ]]; then
+      if [[ ! -f "${RUN_DIR}/${AYIL_STATUS_COMPLETE}" ]] && \
+         ! compgen -G "${RUN_DIR}/.ayil_chunk_*_complete" >/dev/null 2>&1; then
+        ayil_mark_failed "${RUN_DIR}" "${ec}" 2>/dev/null || true
+      fi
+      echo "SLURM_JOB_EXIT job_id=${SLURM_JOB_ID} exit_code=${ec} (TIMEOUT often 0:0 in sacct; check: sacct -j ${SLURM_JOB_ID})" >&2
+    fi
+  fi
+}
+trap ayil_slurm_job_exit_trap EXIT
+
 echo "Slurm job_id=${SLURM_JOB_ID:-?} array_task=${SLURM_ARRAY_TASK_ID:-?} DATE=${DATE} chunk=${AYIL_CHUNK_INDEX:-?}/${AYIL_N_CHUNKS:-?}"
 echo "Logs: $(ayil_slurm_log_out "${RUN_DIR}")  $(ayil_progress_log "${RUN_DIR}")  $(ayil_dales_log "${RUN_DIR}")"
 

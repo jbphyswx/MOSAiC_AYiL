@@ -26,6 +26,8 @@ source "${SCRIPT_DIR}/lib/progress_monitor.sh"
 source "${SCRIPT_DIR}/lib/namoptions_patch.sh"
 # shellcheck source=lib/chunk_run.sh
 source "${SCRIPT_DIR}/lib/chunk_run.sh"
+# shellcheck source=lib/slurm_defaults.sh
+source "${SCRIPT_DIR}/lib/slurm_defaults.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 YYYYMMDD" >&2
@@ -126,6 +128,7 @@ if [[ ${exit_code} -eq 0 ]] && ayil_sim_complete "${LOG}" "${NAMOPTIONS}"; then
     ayil_mark_chunk_complete "${RUN_DIR}" "${CHUNK_IDX}" "${LOG}" "${NPROC}"
     if (( CHUNK_IDX < N_CHUNKS - 1 )); then
       ayil_prune_timed_restart_files "${RUN_DIR}"
+      ayil_slurm_record_wall_calibration "${RUN_DIR}" "${LOG}" "${NAMOPTIONS}"
       rm -f "${RUN_DIR}/${AYIL_STATUS_RUNNING}"
       echo "DONE ${DATE} chunk=${CHUNK_IDX}/${N_CHUNKS}  (restart kept for next chunk)"
       exit 0
