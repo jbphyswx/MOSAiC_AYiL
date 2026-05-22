@@ -35,3 +35,13 @@ assert_eq "$(ayil_run_state "${TMP}")" "prepared" "prepared state"
 
 touch "${TMP}/${AYIL_STATUS_COMPLETE}"
 assert_eq "$(ayil_run_state "${TMP}")" "complete" "complete state"
+
+rm -f "${TMP}/${AYIL_STATUS_COMPLETE}"
+touch "${TMP}/${AYIL_STATUS_RUNNING}" "${TMP}/${AYIL_STATUS_FAILED}"
+assert_eq "$(ayil_run_state "${TMP}")" "failed" "failed beats stale running"
+
+rm -f "${TMP}/${AYIL_STATUS_FAILED}"
+printf 'pid=999999999\nstarted_utc=2020-01-01T00:00:00Z\n' > "${TMP}/${AYIL_STATUS_RUNNING}"
+ayil_recover_stale_run_state "${TMP}"
+assert_eq "$(ayil_run_state "${TMP}")" "failed" "stale running recovered to failed"
+assert_true "[[ ! -f '${TMP}/${AYIL_STATUS_RUNNING}' ]]" "running marker removed"

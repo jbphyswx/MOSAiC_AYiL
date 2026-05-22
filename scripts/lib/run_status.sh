@@ -48,16 +48,43 @@ ayil_run_state() {
     echo "complete"
   elif compgen -G "${run_dir}/.ayil_chunk_*_complete" >/dev/null 2>&1; then
     echo "partial"
-  elif [[ -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; then
-    echo "running"
-  elif [[ -f "${run_dir}/${AYIL_STATUS_INTERRUPTED}" ]]; then
-    echo "interrupted"
   elif [[ -f "${run_dir}/${AYIL_STATUS_FAILED}" ]]; then
     echo "failed"
+  elif [[ -f "${run_dir}/${AYIL_STATUS_INTERRUPTED}" ]]; then
+    echo "interrupted"
+  elif [[ -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; then
+    echo "running"
   elif [[ -d "${run_dir}" && -f "${run_dir}/namoptions" ]]; then
     echo "prepared"
   else
     echo "missing"
+  fi
+}
+
+# Slurm TIMEOUT often leaves .ayil_running with sacct ExitCode 0:0; clear so submit can resume.
+ayil_recover_stale_run_state() {
+  local run_dir="$1"
+  local pid
+  [[ -d "${run_dir}" ]] || return 0
+  if [[ -f "${run_dir}/${AYIL_STATUS_COMPLETE}" ]]; then
+    return 0
+  fi
+  if [[ ! -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; then
+    return 0
+  fi
+  pid="$(grep -E '^pid=' "${run_dir}/${AYIL_STATUS_RUNNING}" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -f "${run_dir}/${AYIL_STATUS_FAILED}" || -f "${run_dir}/${AYIL_STATUS_INTERRUPTED}" ]]; then
+    rm -f "${run_dir}/${AYIL_STATUS_RUNNING}"
+    return 0
+  fi
+  echo "WARN: clearing stale ${AYIL_STATUS_RUNNING} on ${run_dir} (job ended without complete markers)" >&2
+  rm -f "${run_dir}/${AYIL_STATUS_RUNNING}"
+  if [[ ! -f "${run_dir}/${AYIL_STATUS_FAILED}" ]]; then
+    echo "failed_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${run_dir}/${AYIL_STATUS_FAILED}"
+    echo "exit_code=stale_running" >> "${run_dir}/${AYIL_STATUS_FAILED}"
   fi
 }
 

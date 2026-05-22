@@ -77,12 +77,17 @@ ayil_slurm_job_exit_trap() {
   if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     # shellcheck source=../lib/run_status.sh
     source "${REPO_ROOT}/scripts/lib/run_status.sh"
-    if [[ ${ec} -ne 0 ]]; then
-      if [[ ! -f "${RUN_DIR}/${AYIL_STATUS_COMPLETE}" ]] && \
-         ! compgen -G "${RUN_DIR}/.ayil_chunk_*_complete" >/dev/null 2>&1; then
+    local day_done=0
+    [[ -f "${RUN_DIR}/${AYIL_STATUS_COMPLETE}" ]] && day_done=1
+    if [[ ${day_done} -eq 0 ]] && compgen -G "${RUN_DIR}/.ayil_chunk_*_complete" >/dev/null 2>&1; then
+      day_done=1
+    fi
+    if [[ ${day_done} -eq 0 ]]; then
+      # TIMEOUT is often sacct ExitCode 0:0; still mark incomplete jobs failed and drop .ayil_running.
+      if [[ -f "${RUN_DIR}/${AYIL_STATUS_RUNNING}" || ${ec} -ne 0 ]]; then
         ayil_mark_failed "${RUN_DIR}" "${ec}" 2>/dev/null || true
       fi
-      echo "SLURM_JOB_EXIT job_id=${SLURM_JOB_ID} exit_code=${ec} (TIMEOUT often 0:0 in sacct; check: sacct -j ${SLURM_JOB_ID})" >&2
+      echo "SLURM_JOB_EXIT job_id=${SLURM_JOB_ID} exit_code=${ec} state=$(ayil_run_state "${RUN_DIR}") (TIMEOUT: sacct may show 0:0)" >&2
     fi
   fi
 }

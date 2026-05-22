@@ -31,12 +31,20 @@ else
   test_fail "complete should submit with force"
 fi
 
-touch "${TMP}/${AYIL_STATUS_RUNNING}"
-rm -f "${TMP}/${AYIL_STATUS_COMPLETE}"
+printf 'date=20200720\nstarted_utc=2020-01-01T00:00:00Z\nnproc=4\npid=%s\n' "$$" > "${TMP}/${AYIL_STATUS_RUNNING}"
+rm -f "${TMP}/${AYIL_STATUS_COMPLETE}" "${TMP}/${AYIL_STATUS_FAILED}"
 if ! ayil_should_submit_date "${TMP}" 0; then
-  test_pass "running not submittable without force"
+  test_pass "live running marker blocks submit"
 else
   test_fail "running should not submit without force"
+fi
+
+printf 'pid=999999999\nstarted_utc=2020-01-01T00:00:00Z\n' > "${TMP}/${AYIL_STATUS_RUNNING}"
+rm -f "${TMP}/${AYIL_STATUS_FAILED}"
+if ayil_should_submit_date "${TMP}" 0; then
+  test_pass "stale running (dead pid) is recovered and submittable"
+else
+  test_fail "stale running after TIMEOUT should submit"
 fi
 
 touch "${TMP}/.ayil_chunk_0_complete"

@@ -6,6 +6,7 @@
 ayil_should_submit_date() {
   local run_dir="$1"
   local force="${2:-0}"
+  ayil_recover_stale_run_state "${run_dir}"
   local state
   state="$(ayil_run_state "${run_dir}")"
   case "${state}" in

@@ -159,7 +159,20 @@ if ((${#SKIPPED[@]} > 0)); then
 fi
 
 if ((${#TO_SUBMIT[@]} == 0)); then
-  log_msg "Nothing to submit — all requested days are complete or running."
+  log_msg "Nothing to submit — all requested days are skipped (complete, running in queue, or no incomplete chunks)."
+  if ((${#SKIPPED[@]} > 0)); then
+    for date in "${SKIPPED[@]}"; do
+      run_dir="${AYIL_RUNS}/${date}"
+      ayil_recover_stale_run_state "${run_dir}"
+      extra=""
+      if [[ "${CHUNKED}" -eq 1 ]]; then
+        first="$(ayil_first_incomplete_chunk "${run_dir}" "$(ayil_n_chunks)")"
+        extra=" first_incomplete_chunk=${first}"
+      fi
+      log_msg "  SKIP ${date}  state=$(ayil_run_state "${run_dir}")${extra}"
+    done
+    log_msg "If a Slurm TIMEOUT left a stale lock: rm runs/YYYYMMDD/.ayil_running then re-submit, or pull latest scripts (auto-clears)."
+  fi
   exit 0
 fi
 
