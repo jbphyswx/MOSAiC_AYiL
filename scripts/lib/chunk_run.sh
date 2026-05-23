@@ -11,6 +11,14 @@ export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-600}"
 # Must match do_writerestartfiles linkname + readrestartfiles; see scripts/lib/restart_naming.sh.
 AYIL_RESTART_STARTFILE="${AYIL_RESTART_STARTFILE:-initdlatestm00000001.001}"
 
+# Cumulative simulation end time (s since cold start) for chunk index k.
+# Used with ltotruntime=.true. in namoptions (DALES modstartup readinitfiles).
+ayil_chunk_cumulative_runtime_sec() {
+  local chunk_idx="$1"
+  local chunk_sec="${2:-${AYIL_CHUNK_SIM_SEC}}"
+  echo $(( (chunk_idx + 1) * chunk_sec ))
+}
+
 ayil_n_chunks() {
   local day="${1:-${AYIL_DAY_RUNTIME_SEC}}"
   local chunk="${2:-${AYIL_CHUNK_SIM_SEC}}"

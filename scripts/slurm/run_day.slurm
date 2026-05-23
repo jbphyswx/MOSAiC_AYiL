@@ -101,6 +101,12 @@ source "${REPO_ROOT}/scripts/config.sh"
 # shellcheck source=../lib/slurm_defaults.sh
 source "${REPO_ROOT}/scripts/lib/slurm_defaults.sh"
 export DALES_NPROC="${SLURM_NTASKS:-${AYIL_SLURM_NTASKS:-${DALES_NPROC}}}"
+WALL_RESOLVED="$(ayil_slurm_resolve_time)"
+MEM_RESOLVED="${AYIL_SLURM_MEM}"
+echo "Slurm resources: TIMELIMIT=${SLURM_TIMELIMIT:-?} (resolved=${WALL_RESOLVED}) MEM=${MEM_RESOLVED} NTASKS=${DALES_NPROC}"
+if [[ -n "${SLURM_TIMELIMIT:-}" && "${SLURM_TIMELIMIT}" == "00:30:00" ]]; then
+  echo "WARN: 30:00 wall often means AYIL_SLURM_TIME override or bad runs/.ayil_wall_calibration — run: ./scripts/slurm_submit.sh --dry-run DATE" >&2
+fi
 
 if [[ "${AYIL_SLURM_BUILD:-0}" == "1" ]] || [[ ! -x "${DALES_BIN:-${REPO_ROOT}/dales_ayil/build/src/dales4}" ]]; then
   "${REPO_ROOT}/scripts/build_dales.sh"

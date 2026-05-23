@@ -34,6 +34,10 @@ grep -q 'runtime = 600' "${TMP}/namoptions" || {
   echo "FAIL: chunk 0 runtime" >&2
   exit 1
 }
+grep -q 'ltotruntime = .true.' "${TMP}/namoptions" || {
+  echo "FAIL: chunk 0 ltotruntime" >&2
+  exit 1
+}
 grep -q 'lwarmstart = .false.' "${TMP}/namoptions" || {
   echo "FAIL: chunk 0 cold start" >&2
   exit 1
@@ -44,6 +48,10 @@ grep -q 'trestart = 0' "${TMP}/namoptions" || {
 }
 
 ayil_apply_chunk_namoptions "${TMP}/namoptions" 2 18 "${CHUNK_SEC}" "${DAY_SEC}"
+grep -q 'runtime = 1800' "${TMP}/namoptions" || {
+  echo "FAIL: chunk 2 cumulative runtime (3*600)" >&2
+  exit 1
+}
 grep -q 'lwarmstart = .true.' "${TMP}/namoptions" || {
   echo "FAIL: chunk 2 warm start" >&2
   exit 1

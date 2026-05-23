@@ -33,8 +33,34 @@ export AYIL_SLURM_WALL_MIN_SEC="${AYIL_SLURM_WALL_MIN_SEC:-1800}"
 # Sim seconds used for wall estimate (slurm_submit sets for --no-chunked).
 export AYIL_SLURM_WALL_SIM_SEC="${AYIL_SLURM_WALL_SIM_SEC:-${AYIL_CHUNK_SIM_SEC:-600}}"
 
+# True if wall_per is high enough that sbatch --time would exceed AYIL_SLURM_WALL_MIN_SEC.
+ayil_slurm_wall_per_sim_is_usable() {
+  local wall_per="$1"
+  local sim_sec="${2:-${AYIL_SLURM_WALL_SIM_SEC}}"
+  local headroom_pct="${AYIL_SLURM_WALL_HEADROOM_PCT}"
+  local min_sec="${AYIL_SLURM_WALL_MIN_SEC}"
+  awk -v p="${wall_per}" -v s="${sim_sec}" -v h="${headroom_pct}" -v m="${min_sec}" \
+    'BEGIN {
+      if (p <= 0 || s <= 0) exit 1
+      wall = int(s * p * (100 + h) / 100 + 0.5)
+      exit (wall >= m) ? 0 : 1
+    }'
+}
+
+# Reference formula (no calibration file).
+ayil_slurm_formula_wall_per_sim_sec() {
+  local ntasks="${1:-${AYIL_SLURM_NTASKS:-64}}"
+  awk -v ref="${AYIL_SLURM_WALL_REF_PER_SIM_SEC}" -v refn="${AYIL_SLURM_WALL_REF_NTASKS}" \
+    -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
+    'BEGIN {
+      if (n <= 0 || refn <= 0) exit 1
+      printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
+    }'
+}
+
 # Effective wall seconds per simulated second for current AYIL_SLURM_NTASKS.
 # Optional: runs/.ayil_wall_calibration from the last successful chunk on this cluster.
+# Bad cal files (old bug: wall/full-day sim) are ignored automatically.
 ayil_slurm_effective_wall_per_sim_sec() {
   if [[ -n "${AYIL_SLURM_WALL_PER_SIM_SEC:-}" ]]; then
     echo "${AYIL_SLURM_WALL_PER_SIM_SEC}"
@@ -43,30 +69,30 @@ ayil_slurm_effective_wall_per_sim_sec() {
 
   local ntasks="${AYIL_SLURM_NTASKS:-64}"
   local cal="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}/.ayil_wall_calibration"
+  local scaled=""
   if [[ -f "${cal}" ]]; then
     # shellcheck source=/dev/null
     source "${cal}"
     if [[ -n "${AYIL_CALIB_WALL_PER_SIM_SEC:-}" && -n "${AYIL_CALIB_NTASKS:-}" ]]; then
       if [[ "${ntasks}" == "${AYIL_CALIB_NTASKS}" ]]; then
-        echo "${AYIL_CALIB_WALL_PER_SIM_SEC}"
+        scaled="${AYIL_CALIB_WALL_PER_SIM_SEC}"
+      else
+        scaled="$(awk -v ref="${AYIL_CALIB_WALL_PER_SIM_SEC}" -v refn="${AYIL_CALIB_NTASKS}" \
+          -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
+          'BEGIN {
+            if (n <= 0 || refn <= 0) exit 1
+            printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
+          }')"
+      fi
+      if [[ -n "${scaled}" ]] && ayil_slurm_wall_per_sim_is_usable "${scaled}"; then
+        echo "${scaled}"
         return 0
       fi
-      awk -v ref="${AYIL_CALIB_WALL_PER_SIM_SEC}" -v refn="${AYIL_CALIB_NTASKS}" \
-        -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
-        'BEGIN {
-          if (n <= 0 || refn <= 0) exit 1
-          printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
-        }'
-      return 0
+      echo "WARN: ignoring runs/.ayil_wall_calibration (wall/sim=${scaled} too low for ${AYIL_SLURM_WALL_SIM_SEC}s segment; using formula)" >&2
     fi
   fi
 
-  awk -v ref="${AYIL_SLURM_WALL_REF_PER_SIM_SEC}" -v refn="${AYIL_SLURM_WALL_REF_NTASKS}" \
-    -v n="${ntasks}" -v wexp="${AYIL_SLURM_WALL_NTASKS_EXP}" \
-    'BEGIN {
-      if (n <= 0 || refn <= 0) exit 1
-      printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
-    }'
+  ayil_slurm_formula_wall_per_sim_sec "${ntasks}"
 }
 
 # After a successful chunk, record measured wall/sim for this site (overrides formula next submit).
@@ -81,21 +107,33 @@ ayil_slurm_record_wall_calibration() {
   local marker="${run_dir}/${AYIL_STATUS_RUNNING}"
 
   [[ -f "${marker}" ]] || return 0
-  local nproc started_utc runtime sim
+  local nproc started_utc sim sim_start target_runtime seg_sim
   nproc="$(grep -E '^nproc=' "${marker}" | cut -d= -f2-)"
   started_utc="$(grep -E '^started_utc=' "${marker}" | cut -d= -f2-)"
-  runtime="$(ayil_read_runtime "${namoptions}")"
   sim="$(ayil_last_sim_time "${log}")"
-  [[ -n "${nproc}" && -n "${started_utc}" && -n "${runtime}" && -n "${sim}" ]] || return 0
-  awk -v s="${sim}" -v r="${runtime}" 'BEGIN { exit (s >= r - 2.0) ? 0 : 1 }' || return 0
+  sim_start="$(grep -E '^sim_at_start=' "${marker}" 2>/dev/null | cut -d= -f2- || echo 0)"
+  [[ -n "${nproc}" && -n "${started_utc}" && -n "${sim}" ]] || return 0
 
-  local start_epoch end_epoch wall_sec wall_per
+  target_runtime="$(ayil_read_runtime "${namoptions}")"
+  [[ -n "${target_runtime}" ]] || return 0
+  ayil_sim_reached_target "${log}" "${target_runtime}" || return 0
+
+  if [[ "${AYIL_USE_RESTART_CHUNKS:-0}" == "1" ]]; then
+    seg_sim="$(awk -v s="${sim}" -v ss="${sim_start}" 'BEGIN { d = s - ss; if (d > 1) print d; else exit 1 }')"
+  else
+    seg_sim="${target_runtime}"
+  fi
+
+  local start_epoch end_epoch wall_sec wall_per min_wall_per
+  min_wall_per=$(( AYIL_SLURM_WALL_REF_PER_SIM_SEC / 3 ))
+  (( min_wall_per < 8 )) && min_wall_per=8
+
   start_epoch="$(date -u -d "${started_utc}" +%s 2>/dev/null || echo 0)"
   end_epoch="$(date -u +%s)"
   (( start_epoch > 0 && end_epoch > start_epoch )) || return 0
   wall_sec=$(( end_epoch - start_epoch ))
-  wall_per="$(awk -v w="${wall_sec}" -v s="${sim}" 'BEGIN { if (s > 0) printf "%.0f", w / s + 0.5; else exit 1 }')"
-  [[ -n "${wall_per}" && "${wall_per}" -ge 1 ]] 2>/dev/null || return 0
+  wall_per="$(awk -v w="${wall_sec}" -v s="${seg_sim}" 'BEGIN { if (s > 0) printf "%.0f", w / s + 0.5; else exit 1 }')"
+  [[ -n "${wall_per}" && "${wall_per}" -ge "${min_wall_per}" ]] 2>/dev/null || return 0
 
   mkdir -p "${runs_root}"
   cat > "${cal}" <<EOF

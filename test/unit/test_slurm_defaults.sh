@@ -53,3 +53,27 @@ unset AYIL_SLURM_WALL_PER_SIM_SEC
   exit 1
 }
 echo "PASS: AYIL_SLURM_TIME override"
+
+# Stale/bad auto-calibration must not force 30:00 wall (old bug: wall_sec / cumulative sim).
+export AYIL_SLURM_NTASKS=32
+export AYIL_SLURM_WALL_SIM_SEC=300
+unset AYIL_SLURM_WALL_PER_SIM_SEC
+CAL_DIR="${REPO_ROOT}/test/tmp_cal"
+mkdir -p "${CAL_DIR}"
+export AYIL_RUNS="${CAL_DIR}"
+cat > "${CAL_DIR}/.ayil_wall_calibration" <<'EOF'
+AYIL_CALIB_NTASKS=32
+AYIL_CALIB_WALL_PER_SIM_SEC=3
+EOF
+w_bad="$(ayil_slurm_effective_wall_per_sim_sec 2>/dev/null)"
+[[ "${w_bad}" == "25" ]] || {
+  echo "FAIL: bad cal wall/sim=3 should be ignored, got ${w_bad}" >&2
+  exit 1
+}
+t_bad="$(ayil_slurm_compute_walltime 300)"
+[[ "${t_bad}" == "02:24:00" ]] || {
+  echo "FAIL: with bad cal ignored, expected 02:24:00, got ${t_bad}" >&2
+  exit 1
+}
+rm -rf "${CAL_DIR}"
+echo "PASS: ignore unusable .ayil_wall_calibration"

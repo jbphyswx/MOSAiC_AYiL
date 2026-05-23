@@ -191,6 +191,9 @@ ayil_slurm_sbatch_opts SBATCH_OPTS
 WALL_TIME="$(ayil_slurm_resolve_time)"
 WALL_PER_SIM="$(ayil_slurm_effective_wall_per_sim_sec)"
 log_msg "sbatch --time=${WALL_TIME} (sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s, ntasks=${AYIL_SLURM_NTASKS}, wall/sim=${WALL_PER_SIM}, cap=${AYIL_SLURM_WALL_MAX_SEC}s)"
+if [[ "${WALL_TIME}" == "00:30:00" && -z "${AYIL_SLURM_TIME:-}" ]]; then
+  log_msg "WARN: wall clamped to 30:00 (AYIL_SLURM_WALL_MIN_SEC). Remove runs/.ayil_wall_calibration if wall/sim is too low."
+fi
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
 EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
 

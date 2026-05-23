@@ -25,6 +25,28 @@ ayil_set_runtime() {
     "    runtime = ${runtime_sec}    ! AYIL: simulation length (s)"
 }
 
+# Insert or replace a namelist key in namoptions.
+ayil_namoptions_ensure() {
+  local namoptions="$1"
+  local key="$2"
+  local new_line="$3"
+  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "${namoptions}"; then
+    ayil_namoptions_replace "${namoptions}" "${key}" "${new_line}"
+  else
+    sed -i -E "/^[[:space:]]*runtime[[:space:]]*=/a\\
+${new_line}" "${namoptions}"
+  fi
+}
+
+# DALES default ltotruntime=.false. adds btime to runtime (segment since warm start).
+# Chunk chains use cumulative runtime since the cold start of the day.
+ayil_set_ltotruntime() {
+  local namoptions="$1"
+  local flag="${2:-true}" # true | false
+  ayil_namoptions_ensure "${namoptions}" ltotruntime \
+    "    ltotruntime = .${flag}.    ! AYIL: runtime is total since cold start"
+}
+
 # DALES modstartup: trestart < 0 disables all restart file output (initd/inits).
 ayil_disable_restart_writes() {
   ayil_namoptions_replace "$1" trestart \
@@ -74,7 +96,10 @@ ayil_apply_chunk_namoptions() {
     is_last=1
   fi
 
-  ayil_set_runtime "${namoptions}" "${chunk_sec}"
+  local cum_runtime
+  cum_runtime="$(ayil_chunk_cumulative_runtime_sec "${chunk_idx}" "${chunk_sec}")"
+  ayil_set_ltotruntime "${namoptions}" true
+  ayil_set_runtime "${namoptions}" "${cum_runtime}"
 
   if (( chunk_idx == 0 )); then
     ayil_set_lwarmstart "${namoptions}" false

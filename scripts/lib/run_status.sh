@@ -32,14 +32,22 @@ ayil_last_sim_time() {
   ' "${log}"
 }
 
+# True when dales.log sim time reached the target (seconds).
+ayil_sim_reached_target() {
+  local log="$1"
+  local target_sec="$2"
+  local sim
+  sim="$(ayil_last_sim_time "${log}")"
+  [[ -n "${target_sec}" && -n "${sim}" ]] || return 1
+  awk -v s="${sim}" -v r="${target_sec}" 'BEGIN { exit (s >= r - 2.0) ? 0 : 1 }'
+}
+
 ayil_sim_complete() {
   local log="$1"
   local namoptions="$2"
-  local runtime sim
+  local runtime
   runtime="$(ayil_read_runtime "${namoptions}")"
-  sim="$(ayil_last_sim_time "${log}")"
-  [[ -n "${runtime}" && -n "${sim}" ]] || return 1
-  awk -v s="${sim}" -v r="${runtime}" 'BEGIN { exit (s >= r - 2.0) ? 0 : 1 }'
+  ayil_sim_reached_target "${log}" "${runtime}"
 }
 
 ayil_run_state() {
@@ -92,12 +100,18 @@ ayil_mark_running() {
   local run_dir="$1"
   local date="$2"
   local nproc="$3"
+  local log="${4:-}"
+  local sim_at_start="0"
+  if [[ -n "${log}" && -f "${log}" ]]; then
+    sim_at_start="$(ayil_last_sim_time "${log}" 2>/dev/null || echo 0)"
+  fi
   rm -f "${run_dir}/${AYIL_STATUS_INTERRUPTED}" "${run_dir}/${AYIL_STATUS_FAILED}"
   cat > "${run_dir}/${AYIL_STATUS_RUNNING}" <<EOF
 date=${date}
 started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 nproc=${nproc}
 pid=$$
+sim_at_start=${sim_at_start}
 EOF
 }
 

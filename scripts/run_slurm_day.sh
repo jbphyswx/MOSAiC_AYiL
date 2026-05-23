@@ -22,10 +22,10 @@ source "${SCRIPT_DIR}/lib/pending_dates.sh"
 source "${SCRIPT_DIR}/lib/logging_paths.sh"
 # shellcheck source=lib/progress_monitor.sh
 source "${SCRIPT_DIR}/lib/progress_monitor.sh"
-# shellcheck source=lib/namoptions_patch.sh
-source "${SCRIPT_DIR}/lib/namoptions_patch.sh"
 # shellcheck source=lib/chunk_run.sh
 source "${SCRIPT_DIR}/lib/chunk_run.sh"
+# shellcheck source=lib/namoptions_patch.sh
+source "${SCRIPT_DIR}/lib/namoptions_patch.sh"
 # shellcheck source=lib/slurm_defaults.sh
 source "${SCRIPT_DIR}/lib/slurm_defaults.sh"
 
@@ -95,18 +95,23 @@ if [[ "${CHUNK_MODE}" == "1" ]]; then
 fi
 
 runtime="$(ayil_read_runtime "${NAMOPTIONS}")"
+progress_target="${runtime}"
 if [[ "${CHUNK_MODE}" == "1" ]]; then
-  echo "START ${DATE}  chunk=${CHUNK_IDX}/${N_CHUNKS}  nproc=${NPROC}  runtime=${runtime}s  dir=${RUN_DIR}"
+  chunk_seg="${AYIL_CHUNK_SIM_SEC}"
+  echo "START ${DATE}  chunk=${CHUNK_IDX}/${N_CHUNKS}  nproc=${NPROC}  target=${runtime}s (seg=${chunk_seg}s)  dir=${RUN_DIR}"
 else
   echo "START ${DATE}  nproc=${NPROC}  runtime=${runtime}s  dir=${RUN_DIR}"
 fi
 echo "  dales.log=${LOG}  progress.log=${PROGRESS_LOG}"
+if [[ -n "${SLURM_TIMELIMIT:-}" ]]; then
+  echo "  SLURM_TIMELIMIT=${SLURM_TIMELIMIT}  SLURM_JOB_ID=${SLURM_JOB_ID:-?}"
+fi
 
-ayil_mark_running "${RUN_DIR}" "${DATE}" "${NPROC}"
+ayil_mark_running "${RUN_DIR}" "${DATE}" "${NPROC}" "${LOG}"
 : >>"${PROGRESS_LOG}"
 
 MON_PID=""
-ayil_monitor_run "${RUN_DIR}" "${LOG}" "${runtime}" >>"${PROGRESS_LOG}" 2>&1 &
+ayil_monitor_run "${RUN_DIR}" "${LOG}" "${progress_target}" >>"${PROGRESS_LOG}" 2>&1 &
 MON_PID=$!
 
 set +e
