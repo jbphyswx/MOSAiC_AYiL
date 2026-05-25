@@ -84,11 +84,15 @@ ayil_slurm_effective_wall_per_sim_sec() {
             printf "%d\n", int(ref * (refn / n) ^ wexp + 0.5)
           }')"
       fi
-      if [[ -n "${scaled}" ]] && ayil_slurm_wall_per_sim_is_usable "${scaled}"; then
+      local formula
+      formula="$(ayil_slurm_formula_wall_per_sim_sec "${ntasks}")"
+      if [[ -n "${scaled}" && -n "${formula}" ]] \
+        && ayil_slurm_wall_per_sim_is_usable "${scaled}" \
+        && (( scaled >= formula )); then
         echo "${scaled}"
         return 0
       fi
-      echo "WARN: ignoring runs/.ayil_wall_calibration (wall/sim=${scaled} too low for ${AYIL_SLURM_WALL_SIM_SEC}s segment; using formula)" >&2
+      echo "WARN: ignoring runs/.ayil_wall_calibration (wall/sim=${scaled:-?}, formula=${formula:-?}, ntasks=${ntasks}; using formula)" >&2
     fi
   fi
 

@@ -75,5 +75,16 @@ t_bad="$(ayil_slurm_compute_walltime 300)"
   echo "FAIL: with bad cal ignored, expected 02:24:00, got ${t_bad}" >&2
   exit 1
 }
+# wall/sim=20 still below formula (~25) — must not shorten walltime
+mkdir -p "${CAL_DIR}"
+cat > "${CAL_DIR}/.ayil_wall_calibration" <<'EOF'
+AYIL_CALIB_NTASKS=32
+AYIL_CALIB_WALL_PER_SIM_SEC=20
+EOF
+w20="$(ayil_slurm_effective_wall_per_sim_sec 2>/dev/null)"
+[[ "${w20}" == "25" ]] || {
+  echo "FAIL: cal 20 < formula 25 should be ignored, got ${w20}" >&2
+  exit 1
+}
 rm -rf "${CAL_DIR}"
 echo "PASS: ignore unusable .ayil_wall_calibration"

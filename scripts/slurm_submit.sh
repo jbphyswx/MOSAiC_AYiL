@@ -183,6 +183,7 @@ done
 
 if [[ "${CHUNKED}" -eq 1 ]]; then
   export AYIL_SLURM_WALL_SIM_SEC="${AYIL_CHUNK_SIM_SEC}"
+  log_msg "Chunked submit: AYIL_CHUNK_SIM_SEC=${AYIL_CHUNK_SIM_SEC} n_chunks=$(ayil_n_chunks) AYIL_SLURM_NTASKS=${AYIL_SLURM_NTASKS} mem=${AYIL_SLURM_MEM}"
 else
   export AYIL_SLURM_WALL_SIM_SEC="${AYIL_DAY_RUNTIME_SEC}"
 fi
