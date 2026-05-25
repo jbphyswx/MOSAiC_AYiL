@@ -14,6 +14,7 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
 | `dales_ayil/` | AYIL DALES Fortran source; `build/src/dales4` after compile |
 | `ayil_config_input_results/YYYYMMDD/` | **`namoptions` tracked in git** (edited pipeline settings). Large files (`scm_in.*.nc`, `prof.inp.*`, `*.001`, …) from [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362) on first `prepare_case`; install uses `rsync --ignore-existing` so Zenodo does not clobber existing/tracked files. Cache: `.cache/zenodo/`. |
 | `runs/YYYYMMDD/` | Run working dirs (gitignored); outputs + status marker files |
+| `sim_dt/` | Versioned **timestep vs sim time** CSVs per AYIL date (walltime); see `sim_dt/README.md` |
 | `python/ayil/` | Merge fielddump tiles → Zarr (`convert`, `fielddump`, `zarr_store`) |
 | `test/` | Bash unit/integration tests (`./test/run_tests.sh`) |
 
@@ -92,9 +93,10 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 ```
 
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
-- **Default Slurm mode:** chunked — each day is **6 jobs** (`AYIL_CHUNK_SIM_SEC=1800`, `AYIL_DAY_RUNTIME_SEC=10800`) with `--dependency=afterok` so each segment fits **8 h wall**; restart handoff via `initdlatest*` (timed `initd*h*m*` pruned after each chunk). Use `--no-chunked` for one 3 h job/day (needs walltime to finish).
+- **Default Slurm mode:** chunked — jobs chained with `--dependency=afterok` (`AYIL_CHUNK_SIM_SEC` × chunks = `AYIL_DAY_RUNTIME_SEC`, default **10800 s**); restart handoff via `initdlatest*`. Use `--no-chunked` for one job/day only if walltime covers the full day.
 - Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,progress.log,dales.log,convert.log}`. Chunk progress: `.ayil_chunk_N_complete`; day done: `.ayil_complete`.
-- **Per-job defaults** in `scripts/lib/slurm_defaults.sh`: 1 node, **64 tasks**, **200G** RAM; **`--time` auto** from `AYIL_CHUNK_SIM_SEC × AYIL_SLURM_WALL_PER_SIM_SEC` (+ headroom, cap `AYIL_SLURM_WALL_MAX_SEC`). Default chunk **600 s** → ~**03:16:00** wall at 17 s/sim.
+- **Walltime** (`scripts/lib/slurm_defaults.sh`): `T_wall = T_fixed + T_sim × (R_ref × N_ref / N_mpi) × f_dt` (+ 15% headroom). `f_dt` from repo `sim_dt/YYYYMMDD.csv` (plain files; pipeline never runs git). Bootstrap writes CSVs (`AYIL_SIM_DT_RECORD=1`); after `sim_dt/.corpus_complete` set `AYIL_SIM_DT_RECORD=0` and remove dev ingest / merge hooks (see `sim_dt/README.md`).
+- **Memory:** `--mem = ntasks × 4 GiB + 16 GiB` (override `AYIL_SLURM_MEM` in `env.local`).
 - Many **days** can run in parallel (each day = its own 6-job chain); there is no global “one job at a time” cap unless the partition/QOS limits you.
 - Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
 

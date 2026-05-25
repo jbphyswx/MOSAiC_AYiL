@@ -39,6 +39,7 @@ cp scripts/env.example scripts/env.local   # edit modules, paths, DALES_NPROC
 | `dales_ayil/` | AYIL DALES source + committed CMake bootstrap files |
 | `ayil_config_input_results/YYYYMMDD/` | `namoptions` in git; Zenodo artifacts auto-downloaded on first run |
 | `runs/` | Simulation working directories (created by scripts; gitignored) |
+| `sim_dt/` | Versioned per-day timestep vs sim-time tables for Slurm wall estimates ([README](sim_dt/README.md)) |
 
 ## Run simulations locally (no Slurm)
 

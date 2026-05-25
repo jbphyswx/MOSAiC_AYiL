@@ -188,13 +188,37 @@ else
   export AYIL_SLURM_WALL_SIM_SEC="${AYIL_DAY_RUNTIME_SEC}"
 fi
 
-ayil_slurm_sbatch_opts SBATCH_OPTS
-WALL_TIME="$(ayil_slurm_resolve_time)"
-WALL_PER_SIM="$(ayil_slurm_effective_wall_per_sim_sec)"
-log_msg "sbatch --time=${WALL_TIME} (sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s, ntasks=${AYIL_SLURM_NTASKS}, wall/sim=${WALL_PER_SIM}, cap=${AYIL_SLURM_WALL_MAX_SEC}s)"
-if [[ "${WALL_TIME}" == "00:30:00" && -z "${AYIL_SLURM_TIME:-}" ]]; then
-  log_msg "WARN: wall clamped to 30:00 (AYIL_SLURM_WALL_MIN_SEC). Remove runs/.ayil_wall_calibration if wall/sim is too low."
-fi
+# Per-date/chunk wall uses AYIL_WALL_DATE + sim range (see ayil_slurm_walltime_for_submit).
+ayil_slurm_walltime_for_submit() {
+  local date="${1:-}"
+  local chunk="${2:-0}"
+  if [[ "${CHUNKED}" -eq 1 ]]; then
+    export AYIL_WALL_DATE="${date}"
+    export AYIL_WALL_SIM_LO=$(( chunk * AYIL_CHUNK_SIM_SEC ))
+    export AYIL_WALL_SIM_HI=$(( (chunk + 1) * AYIL_CHUNK_SIM_SEC ))
+  elif [[ -n "${date}" ]]; then
+    export AYIL_WALL_DATE="${date}"
+    export AYIL_WALL_SIM_LO=0
+    export AYIL_WALL_SIM_HI="${AYIL_DAY_RUNTIME_SEC}"
+  else
+    unset AYIL_WALL_DATE AYIL_WALL_SIM_LO AYIL_WALL_SIM_HI
+  fi
+  ayil_slurm_compute_walltime
+}
+
+ayil_slurm_log_wall_hint() {
+  local date="$1"
+  local chunk="$2"
+  local wall_time="$3"
+  local factor eff
+  if [[ "${CHUNKED}" -eq 1 ]]; then
+    factor="$(ayil_sim_dt_segment_cost_factor "${date}" "$(( chunk * AYIL_CHUNK_SIM_SEC ))" "$(( (chunk + 1) * AYIL_CHUNK_SIM_SEC ))")"
+  else
+    factor="$(ayil_sim_dt_segment_cost_factor "${date}" 0 "${AYIL_DAY_RUNTIME_SEC}")"
+  fi
+  eff="$(ayil_slurm_effective_wall_per_sim_sec)"
+  log_msg "  --time=${wall_time} sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s eff_wall/sim=${eff} dt_cost×${factor} (sim_dt=$(ayil_sim_dt_csv "${date}" 2>/dev/null || echo missing))"
+}
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
 EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
 
@@ -207,8 +231,7 @@ else
 fi
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-  log_msg "DRY-RUN (no sbatch): would submit with:"
-  printf '  %s\n' "${SBATCH_OPTS[@]}"
+  log_msg "DRY-RUN (no sbatch): ntasks=${AYIL_SLURM_NTASKS} mem=${AYIL_SLURM_MEM} R_ref=${AYIL_SLURM_WALL_REF_PER_SIM_SEC}@${AYIL_SLURM_WALL_REF_NTASKS}"
   for date in "${TO_SUBMIT[@]}"; do
     if [[ "${CHUNKED}" -eq 1 ]]; then
       first="$(ayil_first_incomplete_chunk "${AYIL_RUNS}/${date}" "${N_CHUNKS}")"
@@ -217,10 +240,16 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
       for ((c = first; c < N_CHUNKS; c++)); do
         dep_flag=""
         [[ -n "${dep}" ]] && dep_flag=" --dependency=afterok:${dep}"
+        wall_time="$(ayil_slurm_walltime_for_submit "${date}" "${c}")"
+        ayil_slurm_log_wall_hint "${date}" "${c}" "${wall_time}"
+        ayil_slurm_sbatch_opts SBATCH_OPTS "${wall_time}"
         log_msg "  sbatch${dep_flag} ${SBATCH_OPTS[*]} --job-name=ayil_${date}_c${c} --export=${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c} ${SLURM_SCRIPT}"
         dep="<job_${c}>"
       done
     else
+      wall_time="$(ayil_slurm_walltime_for_submit "${date}" 0)"
+      ayil_slurm_log_wall_hint "${date}" 0 "${wall_time}"
+      ayil_slurm_sbatch_opts SBATCH_OPTS "${wall_time}"
       log_msg "  sbatch ${SBATCH_OPTS[*]} --export=${EXPORT_BASE},DATE=${date} ${SLURM_SCRIPT}"
     fi
   done
@@ -242,32 +271,37 @@ fi
 submit_chunk_chain() {
   local date="$1"
   local run_dir="${AYIL_RUNS}/${date}"
-  local first n_chunks c
+  local first n_chunks c wall_time
   n_chunks="$(ayil_n_chunks)"
   first="$(ayil_first_incomplete_chunk "${run_dir}" "${n_chunks}")"
   if (( first < 0 )); then
     first=0
   fi
-  local prev_jid="" jid dep_args
+  local prev_jid="" jid dep_args chunk_opts
   for ((c = first; c < n_chunks; c++)); do
     dep_args=()
     if [[ -n "${prev_jid}" ]]; then
       dep_args=(--dependency=afterok:"${prev_jid}")
     fi
+    wall_time="$(ayil_slurm_walltime_for_submit "${date}" "${c}")"
+    ayil_slurm_sbatch_opts chunk_opts "${wall_time}"
     jid="$(
-      sbatch "${SBATCH_OPTS[@]}" "${dep_args[@]}" \
+      sbatch "${chunk_opts[@]}" "${dep_args[@]}" \
         --job-name="ayil_${date}_c${c}" \
         --export="${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c}" \
         "${SLURM_SCRIPT}" | awk '{print $NF}'
     )"
-    log_msg "  ${jid}  DATE=${date}  chunk=${c}/${n_chunks}"
+    log_msg "  ${jid}  DATE=${date}  chunk=${c}/${n_chunks}  --time=${wall_time}"
     prev_jid="${jid}"
   done
 }
 
 submit_one_day() {
   local date="$1"
-  sbatch "${SBATCH_OPTS[@]}" \
+  local wall_time day_opts
+  wall_time="$(ayil_slurm_walltime_for_submit "${date}" 0)"
+  ayil_slurm_sbatch_opts day_opts "${wall_time}"
+  sbatch "${day_opts[@]}" \
     --job-name="ayil_${date}" \
     --export="${EXPORT_BASE},DATE=${date}" \
     "${SLURM_SCRIPT}"
@@ -276,7 +310,7 @@ submit_one_day() {
 total_jobs=0
 if [[ "${CHUNKED}" -eq 1 ]]; then
   for date in "${TO_SUBMIT[@]}"; do
-    log_msg "Submit chain ${date} ($(ayil_n_chunks) chunks, --time=${WALL_TIME} each):"
+    log_msg "Submit chain ${date} ($(ayil_n_chunks) chunks; --time per chunk from sim_dt + 1/n model):"
     submit_chunk_chain "${date}"
     total_jobs=$(( total_jobs + $(ayil_n_chunks) ))
   done

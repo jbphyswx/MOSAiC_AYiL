@@ -133,16 +133,22 @@ if [[ ${exit_code} -eq 0 ]] && ayil_sim_complete "${LOG}" "${NAMOPTIONS}"; then
     ayil_mark_chunk_complete "${RUN_DIR}" "${CHUNK_IDX}" "${LOG}" "${NPROC}"
     if (( CHUNK_IDX < N_CHUNKS - 1 )); then
       ayil_prune_timed_restart_files "${RUN_DIR}"
-      ayil_slurm_record_wall_calibration "${RUN_DIR}" "${LOG}" "${NAMOPTIONS}"
+      # Wall cal only from chunk 0 (cold start); warm chunks are not representative for sbatch --time.
+      if (( CHUNK_IDX == 0 )); then
+        ayil_slurm_record_wall_calibration "${RUN_DIR}" "${LOG}" "${NAMOPTIONS}"
+      fi
+      ayil_sim_dt_merge_log "${DATE}" "${LOG}" "${NPROC}"
       rm -f "${RUN_DIR}/${AYIL_STATUS_RUNNING}"
       echo "DONE ${DATE} chunk=${CHUNK_IDX}/${N_CHUNKS}  (restart kept for next chunk)"
       exit 0
     fi
     ayil_prune_all_restart_files "${RUN_DIR}"
+    ayil_sim_dt_merge_log "${DATE}" "${LOG}" "${NPROC}"
     ayil_mark_complete "${RUN_DIR}" "${LOG}" "${NPROC}"
     echo "DONE ${DATE}  all ${N_CHUNKS} chunks  $(du -sh "${RUN_DIR}" | awk '{print $1}')"
     exit 0
   fi
+  ayil_sim_dt_merge_log "${DATE}" "${LOG}" "${NPROC}"
   ayil_mark_complete "${RUN_DIR}" "${LOG}" "${NPROC}"
   echo "DONE ${DATE}  $(du -sh "${RUN_DIR}" | awk '{print $1}')"
   exit 0

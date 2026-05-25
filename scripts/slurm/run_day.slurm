@@ -83,11 +83,11 @@ ayil_slurm_job_exit_trap() {
       day_done=1
     fi
     if [[ ${day_done} -eq 0 ]]; then
-      # TIMEOUT is often sacct ExitCode 0:0; still mark incomplete jobs failed and drop .ayil_running.
+      # Job ended without .ayil_complete / chunk markers (TIMEOUT often has exit_code=0).
       if [[ -f "${RUN_DIR}/${AYIL_STATUS_RUNNING}" || ${ec} -ne 0 ]]; then
         ayil_mark_failed "${RUN_DIR}" "${ec}" 2>/dev/null || true
       fi
-      echo "SLURM_JOB_EXIT job_id=${SLURM_JOB_ID} exit_code=${ec} state=$(ayil_run_state "${RUN_DIR}") (TIMEOUT: sacct may show 0:0)" >&2
+      echo "SLURM_JOB_EXIT job_id=${SLURM_JOB_ID} exit_code=${ec} state=$(ayil_run_state "${RUN_DIR}") (incomplete — sacct -j ${SLURM_JOB_ID} for TIMEOUT/CANCELLED/OOM)" >&2
     fi
   fi
 }

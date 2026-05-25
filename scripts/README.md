@@ -84,9 +84,11 @@ Automated checks: `test_restart_naming.sh`, `test_chunk_restart_handoff.sh`, `te
 
 ## Slurm (HPC batch)
 
-Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **200G** RAM (`64×3 + 8` GiB headroom), 8h walltime. Override in `scripts/env.local`.
+Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **`--mem = ntasks×4 GiB + 16`**, **`--time` auto** from `T_fixed + T_sim×(R_ref×N_ref/N_mpi)` (defaults `R_ref=17` @ `N_ref=64`, +15% headroom, max 8 h). Override in `scripts/env.local`; see `env.example` for `AYIL_SLURM_WALL_*`.
 
-**Default submit mode is chunked:** each day → **6 jobs** of 1800 s sim (`--dependency=afterok`), so each job fits 8 h wall while the full day is 10800 s (3 h). Many days submit in parallel (one chain per day). Use `--no-chunked` for one job/day only if walltime allows the full 3 h run.
+**Default submit mode is chunked:** chained jobs (`--dependency=afterok`); segment length `AYIL_CHUNK_SIM_SEC` (default **600 s** → 18 chunks/day for 10800 s). Many days submit in parallel (one chain per day). Dry-run logs `n_chunks`, `ntasks`, and **per-chunk** `--time` (1/n MPI model × optional **dt profile**). Use `--no-chunked` for one job/day only if walltime covers the full day.
+
+**Timestep vs sim time:** `sim_dt/YYYYMMDD.csv` in the repo tree (see [`sim_dt/README.md`](../sim_dt/README.md)). Bootstrap: chunks update CSVs on disk (`AYIL_SIM_DT_RECORD=1`); backfill `./scripts/dev/ingest_sim_dt.sh`. When complete: `sim_dt/.corpus_complete` + `AYIL_SIM_DT_RECORD=0` — production reads only, no runtime merge.
 
 ### First time on the cluster
 
@@ -101,7 +103,7 @@ cp scripts/env.example scripts/env.local
 ```bash
 ./scripts/list_cases.sh
 ./scripts/slurm_submit.sh --pending --dry-run    # lists RUN vs SKIP; no sbatch
-./scripts/slurm_submit.sh --pending                # chunked chains (6 jobs/day)
+./scripts/slurm_submit.sh --pending                # chunked chains (n_chunks = day_runtime / chunk_sim)
 ```
 
 Behavior:

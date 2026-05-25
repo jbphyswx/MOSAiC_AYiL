@@ -265,6 +265,9 @@ run_one_date() {
   trap - INT TERM
 
   if [[ ${exit_code} -eq 0 ]] && ayil_sim_complete "${LOG}" "${RUN_DIR}/namoptions"; then
+    # shellcheck source=lib/sim_dt.sh
+    source "${SCRIPT_DIR}/lib/sim_dt.sh"
+    ayil_sim_dt_merge_log "${DATE}" "${LOG}" "${NPROC}"
     ayil_mark_complete "${RUN_DIR}" "${LOG}" "${NPROC}"
     log_msg "DONE ${DATE}  $(du -sh "${RUN_DIR}" | awk '{print $1}')  log=${LOG}"
   else

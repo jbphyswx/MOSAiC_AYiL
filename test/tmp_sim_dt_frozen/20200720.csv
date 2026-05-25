@@ -1,0 +1,4 @@
+# ayil_sim_dt version=1
+# date=20200720 bin_sec=60 dt_ref_sec=2.0 host=sampo nproc=4 updated_utc=2026-05-25T16:27:28Z
+sim_bin_s,dt_s,n_lines,last_utc
+0,0.000000000,0,last_utc
