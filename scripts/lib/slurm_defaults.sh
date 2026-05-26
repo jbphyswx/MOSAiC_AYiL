@@ -2,10 +2,14 @@
 # Slurm resource defaults for MOSAiC_AYIL. Source after config.sh and sim_dt.sh.
 #
 # Walltime model (unless AYIL_SLURM_TIME is set):
-#   T_wall = T_fixed + T_sim × (R_ref × N_ref / N_mpi)
-# where R_ref is seconds of wall clock per simulated second at N_ref ranks (integration
-# cost only). T_fixed is startup/I/O/MPI init per job (weak scaling). Halving ranks
-# doubles the parallel term; doubling sim time doubles the parallel term.
+#   T_wall = T_fixed + T_sim × (R_ref × N_ref / N_mpi) × f_dt
+# R_ref = wall seconds per sim second at N_ref ranks (integration only, no I/O lump).
+# Default R_ref=17 is a conservative placeholder — NOT tied to a logged dt@64 calibration.
+# Set AYIL_SLURM_WALL_REF_PER_SIM_SEC from a finished run:
+#   ./scripts/dev/estimate_wall_ref.sh YYYYMMDD --ntasks N
+# f_dt ≈ ⟨dt_ref/dt⟩ from sim_dt/YYYYMMDD.csv (dt_ref is the pivot for scaling, not “the dt of 17”).
+# Missing sim_dt → pessimistic dt_ref/min_dt; known date → can request less wall.
+# Halving MPI tasks doubles the parallel term (ideal strong scaling).
 #
 # Memory: --mem = ntasks × GiB/rank + headroom.
 
@@ -23,7 +27,7 @@ if [[ -z "${AYIL_SLURM_MEM:-}" ]]; then
   export AYIL_SLURM_MEM="$(( AYIL_SLURM_NTASKS * AYIL_SLURM_MEM_PER_RANK_GIB + AYIL_SLURM_MEM_HEADROOM_GIB ))G"
 fi
 
-# Reference point: R_ref seconds wall per sim second at N_ref MPI tasks (integration).
+# Reference point: R_ref wall/sim at N_ref ranks at dt ≈ AYIL_SIM_DT_REF_SEC (see sim_dt.sh).
 export AYIL_SLURM_WALL_REF_NTASKS="${AYIL_SLURM_WALL_REF_NTASKS:-64}"
 export AYIL_SLURM_WALL_REF_PER_SIM_SEC="${AYIL_SLURM_WALL_REF_PER_SIM_SEC:-17}"
 # Per-job fixed overhead (init, I/O, cold start) — not divided by N_mpi or sim length.

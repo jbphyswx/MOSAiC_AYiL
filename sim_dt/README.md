@@ -41,6 +41,8 @@ Create `sim_dt/.corpus_complete` (one `YYYYMMDD` per line) when every production
 | `AYIL_SIM_DT_DIR` | `$MOSAiC_AYIL_ROOT/sim_dt` | Directory for CSVs |
 | `AYIL_SIM_DT_RECORD` | `1` | `0` = production does not write CSVs |
 | `AYIL_SIM_DT_USE` | `1` | `0` = ignore tables for walltime |
-| `AYIL_SIM_DT_REF_SEC` | `2.0` | Reference dt in cost factor |
+| `AYIL_SIM_DT_REF_SEC` | `2.0` | Pivot for `f_dt = dt_ref/dt` (not “the dt when R_ref was measured” unless you set it from `estimate_wall_ref.sh`) |
+| `AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC` | `0.6` | If no table / sparse coverage: `f_dt = dt_ref / this` (conservative) |
+| `AYIL_SIM_DT_MIN_COVERAGE_FRAC` | `0.8` | Fraction of chunk sim window bins must be covered else bump to pessimistic `f_dt` |
 
 Dev ingest sets `AYIL_SIM_DT_FORCE_RECORD=1` so it can refresh files even after `.corpus_complete` (manual maintenance only).

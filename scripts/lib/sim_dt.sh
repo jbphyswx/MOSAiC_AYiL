@@ -5,9 +5,13 @@
 # See sim_dt/README.md for bootstrap → corpus_complete → retire generation.
 #
 # Wall parallel term scales as mean(dt_ref/dt) over the segment — smaller dt ⇒ more steps/s.
+# R_ref in slurm_defaults assumes dt ≈ dt_ref; f_dt adjusts per date and sim-time window.
 
 export AYIL_SIM_DT_BIN_SEC="${AYIL_SIM_DT_BIN_SEC:-60}"
 export AYIL_SIM_DT_REF_SEC="${AYIL_SIM_DT_REF_SEC:-2.0}"
+# Pessimistic cap when sim_dt/DATE.csv is missing or does not cover the chunk window.
+export AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC:-0.6}"
+export AYIL_SIM_DT_MIN_COVERAGE_FRAC="${AYIL_SIM_DT_MIN_COVERAGE_FRAC:-0.8}"
 export AYIL_SIM_DT_USE="${AYIL_SIM_DT_USE:-1}"
 # 1 while bootstrap may write sim_dt/*.csv; set 0 after sim_dt/.corpus_complete
 export AYIL_SIM_DT_RECORD="${AYIL_SIM_DT_RECORD:-1}"
@@ -63,7 +67,7 @@ ayil_sim_dt_parse_log_to_tsv() {
         sub(/^Time of Day:[[:space:]]+/, "", w)
         wall = w
       }
-      if (sim > 0 && dt > 0) {
+      if (sim >= 0 && dt > 0) {
         printf "%.4f\t%.9f\t%s\n", sim, dt, wall
       }
     }
@@ -121,7 +125,7 @@ ayil_sim_dt_merge_log() {
       if (match(rest2, /[0-9]+\.?[0-9]*/)) {
         dt = substr(rest2, RSTART, RLENGTH) + 0
       } else next
-      if (sim <= 0 || dt <= 0) next
+      if (sim < 0 || dt <= 0) next
       b = bin_of(sim)
       if (!(b in dt_min) || dt < dt_min[b]) dt_min[b] = dt
       n_lines[b]++
@@ -145,21 +149,38 @@ ayil_sim_dt_merge_log() {
   mv "${csv}.new" "${csv}"
 }
 
-# Mean(dt_ref/dt) over bins overlapping [sim_lo, sim_hi). Returns 1.0 if no data.
+# f_dt = dt_ref/dt (integration cost ~ 1/dt). Pessimistic when table missing or sparse coverage.
+ayil_sim_dt_pessimistic_cost_factor() {
+  local ref="${AYIL_SIM_DT_REF_SEC}"
+  local mindt="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC}"
+  awk -v ref="${ref}" -v mindt="${mindt}" \
+    'BEGIN { if (ref <= 0 || mindt <= 0) print 1; else printf "%.4f", ref / mindt }'
+}
+
+# Mean(dt_ref/dt) over bins in [sim_lo, sim_hi); unknown/sparse → pessimistic factor.
 ayil_sim_dt_segment_cost_factor() {
   local date="$1"
   local sim_lo="${2:-0}"
   local sim_hi="${3:-${AYIL_DAY_RUNTIME_SEC:-10800}}"
-  local csv ref
+  local csv ref pess cov_frac
   if [[ "${AYIL_SIM_DT_USE}" != "1" ]]; then
     echo 1
     return 0
   fi
+  pess="$(ayil_sim_dt_pessimistic_cost_factor)"
   csv="$(ayil_sim_dt_csv "${date}")"
   ref="${AYIL_SIM_DT_REF_SEC}"
-  [[ -f "${csv}" ]] || { echo 1; return 0; }
-  awk -v lo="${sim_lo}" -v hi="${sim_hi}" -v ref="${ref}" -v bin="${AYIL_SIM_DT_BIN_SEC}" '
-    BEGIN { if (hi <= lo || ref <= 0) { print 1; exit } }
+  cov_frac="${AYIL_SIM_DT_MIN_COVERAGE_FRAC}"
+  [[ -f "${csv}" ]] || {
+    echo "${pess}"
+    return 0
+  }
+  awk -v lo="${sim_lo}" -v hi="${sim_hi}" -v ref="${ref}" -v bin="${AYIL_SIM_DT_BIN_SEC}" \
+    -v pess="${pess}" -v cov="${cov_frac}" \
+    'BEGIN {
+      if (hi <= lo || ref <= 0) { print pess; exit }
+      seg_len = hi - lo
+    }
     /^#/ || /^sim_bin/ { next }
     {
       split($0, a, ",")
@@ -177,8 +198,16 @@ ayil_sim_dt_segment_cost_factor() {
       weight += w
     }
     END {
-      if (weight > 0) printf "%.4f", cost / weight
-      else print 1
+      if (weight <= 0) {
+        print pess
+        exit
+      }
+      f = cost / weight
+      if (weight < cov * seg_len && f < pess) {
+        printf "%.4f", pess
+      } else {
+        printf "%.4f", f
+      }
     }
   ' "${csv}"
 }

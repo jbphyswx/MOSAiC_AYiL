@@ -4,12 +4,11 @@ set -euo pipefail
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${TEST_DIR}/../.." && pwd)"
 export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
-export AYIL_SIM_DT_DIR="${REPO_ROOT}/test/tmp_sim_dt"
+export AYIL_SIM_DT_DIR="$(mktemp -d)"
 export AYIL_SIM_DT_BIN_SEC=60
 export AYIL_SIM_DT_REF_SEC=2.0
 export AYIL_SIM_DT_RECORD=1
-rm -rf "${AYIL_SIM_DT_DIR}"
-mkdir -p "${AYIL_SIM_DT_DIR}"
+trap 'rm -rf "${AYIL_SIM_DT_DIR}" "${AYIL_SIM_DT_FROZEN_DIR:-}"' EXIT
 # shellcheck source=../../scripts/lib/sim_dt.sh
 source "${REPO_ROOT}/scripts/lib/sim_dt.sh"
 
@@ -47,16 +46,21 @@ base_plain="$(ayil_slurm_resolve_base_wall_sec 120)"
 }
 echo "PASS: wall base with sim_dt ${base_slow} > ${base_plain}"
 
-export AYIL_SIM_DT_DIR="${REPO_ROOT}/test/tmp_sim_dt_frozen"
-rm -rf "${AYIL_SIM_DT_DIR}"
-mkdir -p "${AYIL_SIM_DT_DIR}"
-echo "20190101" > "${AYIL_SIM_DT_DIR}/.corpus_complete"
+export AYIL_SIM_DT_FROZEN_DIR="$(mktemp -d)"
+export AYIL_SIM_DT_DIR="${AYIL_SIM_DT_FROZEN_DIR}"
+echo "20190101" > "${AYIL_SIM_DT_FROZEN_DIR}/.corpus_complete"
 export AYIL_SIM_DT_RECORD=1
 ayil_sim_dt_merge_log "X" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "1"
-[[ ! -f "${AYIL_SIM_DT_DIR}/X.csv" ]] || {
+[[ ! -f "${AYIL_SIM_DT_FROZEN_DIR}/X.csv" ]] || {
   echo "FAIL: merge should no-op when .corpus_complete exists" >&2
   exit 1
 }
 echo "PASS: no runtime merge after corpus_complete"
 
-rm -rf "${REPO_ROOT}/test/tmp_sim_dt" "${REPO_ROOT}/test/tmp_sim_dt_frozen"
+f_unk="$(ayil_sim_dt_segment_cost_factor UNKNOWN_DATE 0 300)"
+pess="$(ayil_sim_dt_pessimistic_cost_factor)"
+[[ "${f_unk}" == "${pess}" ]] || {
+  echo "FAIL: missing sim_dt must use pessimistic factor; got ${f_unk} expected ${pess}" >&2
+  exit 1
+}
+echo "PASS: missing sim_dt uses pessimistic f_dt=${f_unk}"
