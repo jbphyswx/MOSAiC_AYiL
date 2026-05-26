@@ -1,0 +1,9 @@
+# ayil_sim_dt version=3
+# date=20191026 bin_sec=60 dt_ref_sec=2.0 host=login2 nproc= updated_utc=2026-05-26T15:57:50Z
+# dt_s = sim_cover/step_units per bin (step_units=sum delta_sim/dt over diagnostic intervals)
+sim_bin_s,dt_s,n_lines,last_utc
+0,0.449668321,133,2026-05-26T15:57:50Z
+60,0.468749407,128,2026-05-26T15:57:50Z
+120,0.479958409,125,2026-05-26T15:57:50Z
+180,0.491683838,122,2026-05-26T15:57:50Z
+240,0.505953581,108,2026-05-26T15:57:50Z
