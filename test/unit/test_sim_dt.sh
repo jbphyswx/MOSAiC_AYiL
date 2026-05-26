@@ -52,6 +52,26 @@ awk -F, '$1==120 && $2+0==1.5 { ok=1 }
 }
 echo "PASS: cumulative log merge extends existing bins"
 
+ayil_sim_dt_merge_log "BLIP" "${REPO_ROOT}/test/fixtures/dales_log_dt_sync_blip.txt" "32"
+awk -F, '$1==60 && $2+0 > 1.9 && $2+0 < 2.2 { ok=1 }
+  END { exit !ok }' "${AYIL_SIM_DT_DIR}/BLIP.csv" || {
+  echo "FAIL: bin 60 dt_s should be ~2.07 effective, not min 0.005" >&2
+  exit 1
+}
+ayil_sim_dt_merge_log "TWORATE" "${REPO_ROOT}/test/fixtures/dales_log_dt_two_rate.txt" "32"
+awk -F, '$1==60 && $2+0 > 39.5 && $2+0 < 40.5 { ok=1 }
+  END { exit !ok }' "${AYIL_SIM_DT_DIR}/TWORATE.csv" || {
+  echo "FAIL: bin 60 dt_s should be 40 (60s at dt=30 + 30s at dt=60), not arithmetic mean 45" >&2
+  exit 1
+}
+echo "PASS: effective dt_s from interval step_units (TWORATE bin60=40)"
+f_blip="$(ayil_sim_dt_segment_cost_factor BLIP 0 120)"
+awk -v f="${f_blip}" 'BEGIN { if (f < 0.9 || f > 1.15) exit 1 }' || {
+  echo "FAIL: sync blip chunk f_dt should be ~1, got ${f_blip}" >&2
+  exit 1
+}
+echo "PASS: effective dt ignores single sync blip (f_dt=${f_blip})"
+
 ayil_sim_dt_merge_log "FAST" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "64"
 f_fast="$(ayil_sim_dt_segment_cost_factor FAST 0 120)"
 awk -v f="${f_fast}" 'BEGIN { if (f < 0.95 || f > 1.05) exit 1 }' || {

@@ -19,8 +19,10 @@ sim_bin_s,dt_s,n_lines,last_utc
 ```
 
 - **`sim_bin_s`**: start of bin (seconds since cold start; default **60 s** via `AYIL_SIM_DT_BIN_SEC`).
-- **`dt_s`**: minimum `dt` in that bin (conservative for wall estimates).
+- **`dt_s`**: **effective** timestep for that bin: `sim_cover / step_units`, where `step_units = Σ (Δsim / dt)` over diagnostic intervals. Each printed `dt:` is the mean `rdt` since the previous line (`modchecksim.f90`); interval `(sim_prev, sim]` uses the `dt` on the line at `sim`. Matches `sim_seconds / n_steps` when step size is piecewise constant.
+- **`n_lines`**: count of diagnostic lines whose `Time of Simulation` falls in the bin.
 - Rows are written **ascending by `sim_bin_s`** (simulation time); scripts may scan linearly without re-sorting.
+- Header `version=3`: interval-based effective `dt_s`. Re-ingest older tables after upgrading.
 
 ## Lifecycle
 
@@ -43,7 +45,7 @@ Create `sim_dt/.corpus_complete` (one `YYYYMMDD` per line) when every production
 | `AYIL_SIM_DT_RECORD` | `1` | `0` = production does not write CSVs |
 | `AYIL_SIM_DT_USE` | `1` | `0` = ignore tables for walltime |
 | `AYIL_SIM_DT_REF_SEC` | `2.0` | Pivot for `f_dt = dt_ref/dt` (not “the dt when R_ref was measured” unless you set it from `estimate_wall_ref.sh`) |
-| `AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC` | `0.6` | If no table / sparse coverage: `f_dt = dt_ref / this` (conservative) |
+| `AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC` | `0.6` | Only when **no** table or **sparse** chunk coverage: assume effective `dt` this small → `f_dt = dt_ref / this` |
 | `AYIL_SIM_DT_MIN_COVERAGE_FRAC` | `0.8` | Fraction of chunk sim window bins must be covered else bump to pessimistic `f_dt` |
 
 Dev ingest sets `AYIL_SIM_DT_FORCE_RECORD=1` so it can refresh files even after `.corpus_complete` (manual maintenance only).

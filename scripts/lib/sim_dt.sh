@@ -4,7 +4,10 @@
 # Canonical store (versioned in git): ${MOSAiC_AYIL_ROOT}/sim_dt/YYYYMMDD.csv
 # See sim_dt/README.md for bootstrap → corpus_complete → retire generation.
 #
-# Wall parallel term scales as mean(dt_ref/dt) over the segment — smaller dt ⇒ more steps/s.
+# Wall parallel term: time-mean of dt_ref/dt over bins in the chunk.
+# dt_s = effective timestep per bin: sim_seconds / step_units, with step_units = sum(delta_sim/dt)
+# over diagnostic intervals (printed dt is mean rdt since previous line; modchecksim.f90).
+# Pessimistic f_dt only when sim_dt/DATE.csv is missing or sparse for that chunk window.
 # R_ref in slurm_defaults assumes dt ≈ dt_ref; f_dt adjusts per date and sim-time window.
 
 export AYIL_SIM_DT_BIN_SEC="${AYIL_SIM_DT_BIN_SEC:-60}"
@@ -93,22 +96,19 @@ ayil_sim_dt_merge_log() {
     -v ref="${AYIL_SIM_DT_REF_SEC}" \
     -v utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -v host="$(hostname -s 2>/dev/null || hostname)" \
-    -v existing="${csv}" \
     '
     function bin_of(sim) { return int(sim / bin) * bin }
 
-    BEGIN {
-      if (existing != "" && (getline < existing) > 0) {
-        do {
-          if ($0 ~ /^#/) continue
-          split($0, a, ",")
-          if (length(a) >= 2) {
-            b = a[1] + 0
-            dt_min[b] = a[2] + 0
-            # n_lines recomputed from the log on each merge (cumulative dales.log is re-scanned).
-          }
-        } while ((getline < existing) > 0)
-        close(existing)
+    # Interval (lo, hi] used mean dt from the diagnostic line ending at hi.
+    function add_interval(lo, hi, dt,    b, seg_lo, seg_hi, w) {
+      if (hi <= lo || dt <= 0) return
+      for (b = bin_of(lo); b <= bin_of(hi - 1e-9); b += bin) {
+        seg_lo = (lo > b) ? lo : b
+        seg_hi = (hi < b + bin) ? hi : b + bin
+        w = seg_hi - seg_lo
+        if (w <= 0) continue
+        step_units[b] += w / dt
+        sim_cover[b] += w
       }
     }
 
@@ -125,19 +125,27 @@ ayil_sim_dt_merge_log() {
         dt = substr(rest2, RSTART, RLENGTH) + 0
       } else next
       if (sim < 0 || dt <= 0) next
+      if (have_prev && sim > prev_sim) {
+        add_interval(prev_sim, sim, dt)
+      }
       b = bin_of(sim)
-      if (!(b in dt_min) || dt < dt_min[b]) dt_min[b] = dt
       n_lines[b]++
+      last_dt[b] = dt
       last_utc[b] = utc
+      prev_sim = sim
+      have_prev = 1
     }
 
     END {
-      printf "# ayil_sim_dt version=1\n"
+      printf "# ayil_sim_dt version=3\n"
       printf "# date=%s bin_sec=%d dt_ref_sec=%s host=%s nproc=%s updated_utc=%s\n", \
         date, bin, ref, host, nproc, utc
+      printf "# dt_s = sim_cover/step_units per bin (step_units=sum delta_sim/dt over diagnostic intervals)\n"
       printf "sim_bin_s,dt_s,n_lines,last_utc\n"
       nb = 0
-      for (b in dt_min) {
+      for (b in step_units) seen[b] = 1
+      for (b in n_lines) seen[b] = 1
+      for (b in seen) {
         nb++
         bins[nb] = b + 0
       }
@@ -152,7 +160,14 @@ ayil_sim_dt_merge_log() {
       }
       for (i = 1; i <= nb; i++) {
         b = bins[i]
-        printf "%d,%.9f,%d,%s\n", b, dt_min[b], n_lines[b], last_utc[b]
+        if (step_units[b] > 0) {
+          dt_eff = sim_cover[b] / step_units[b]
+        } else if (b in last_dt) {
+          dt_eff = last_dt[b]
+        } else {
+          continue
+        }
+        printf "%d,%.9f,%d,%s\n", b, dt_eff, n_lines[b], last_utc[b]
       }
     }
   ' "${log}" > "${csv}.new"
@@ -162,7 +177,7 @@ ayil_sim_dt_merge_log() {
   command mv -f "${csv}.new" "${csv}"
 }
 
-# f_dt = dt_ref/dt (integration cost ~ 1/dt). Pessimistic when table missing or sparse coverage.
+# f_dt = time-mean(dt_ref/dt) over bins in chunk. Pessimistic only if table missing or sparse.
 ayil_sim_dt_pessimistic_cost_factor() {
   local ref="${AYIL_SIM_DT_REF_SEC}"
   local mindt="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC}"

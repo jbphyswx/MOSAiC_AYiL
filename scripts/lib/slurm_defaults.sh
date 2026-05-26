@@ -8,7 +8,7 @@
 # Set AYIL_SLURM_WALL_REF_PER_SIM_SEC from a finished run:
 #   ./scripts/dev/estimate_wall_ref.sh YYYYMMDD --ntasks N
 # f_dt ≈ ⟨dt_ref/dt⟩ from sim_dt/YYYYMMDD.csv (dt_ref is the pivot for scaling, not “the dt of 17”).
-# Missing sim_dt → pessimistic dt_ref/min_dt; known date → can request less wall.
+# Missing/sparse sim_dt → pessimistic f_dt; else time-mean(dt_ref/dt) from mean dt per bin.
 # Halving MPI tasks doubles the parallel term (ideal strong scaling).
 #
 # Memory: --mem = ntasks × GiB/rank + headroom.
