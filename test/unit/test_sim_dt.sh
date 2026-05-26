@@ -72,6 +72,74 @@ awk -v f="${f_blip}" 'BEGIN { if (f < 0.9 || f > 1.15) exit 1 }' || {
 }
 echo "PASS: effective dt ignores single sync blip (f_dt=${f_blip})"
 
+# Truncated log must not drop high-sim bins already in sim_dt/ CSV.
+ayil_sim_dt_merge_log "KEEP" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "32"
+printf '%s\n' \
+  '# ayil_sim_dt version=3' \
+  '# date=KEEP bin_sec=60 dt_ref_sec=2.0 host=x nproc=32 updated_utc=2020-01-01T00:00:00Z' \
+  'sim_bin_s,dt_s,n_lines,last_utc' \
+  '0,1.000000000,1,2020-01-01T00:00:00Z' \
+  '60,1.000000000,1,2020-01-01T00:00:00Z' \
+  '120,1.000000000,1,2020-01-01T00:00:00Z' \
+  '180,9.000000000,1,2020-01-01T00:00:00Z' \
+  > "${AYIL_SIM_DT_DIR}/KEEP.csv"
+ayil_sim_dt_merge_log "KEEP" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "32"
+awk -F, '$1==180 && $2+0 > 8 { ok=1 }
+  END { exit !ok }' "${AYIL_SIM_DT_DIR}/KEEP.csv" || {
+  echo "FAIL: bin 180 should be preserved when log ends at sim 120" >&2
+  exit 1
+}
+awk -F, '$1==0 && $2+0 < 1.5 { ok=1 }
+  END { exit !ok }' "${AYIL_SIM_DT_DIR}/KEEP.csv" || {
+  echo "FAIL: bin 0 should be preserved when already in CSV (no --recompute)" >&2
+  exit 1
+}
+echo "PASS: preserves sim_dt bins above truncated dales.log"
+
+ayil_sim_dt_merge_log "IDEM" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "64"
+body1="$(awk '/^sim_bin_s,/{p=1} p' "${AYIL_SIM_DT_DIR}/IDEM.csv")"
+ayil_sim_dt_merge_log "IDEM" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "64"
+body2="$(awk '/^sim_bin_s,/{p=1} p' "${AYIL_SIM_DT_DIR}/IDEM.csv")"
+[[ "${body1}" == "${body2}" ]] || {
+  echo "FAIL: second merge of same log should not change data rows" >&2
+  exit 1
+}
+echo "PASS: idempotent merge preserves existing bin values"
+
+export AYIL_SIM_DT_RECOMPUTE=1
+ayil_sim_dt_merge_log "IDEM" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "64"
+unset AYIL_SIM_DT_RECOMPUTE
+awk -F, '$1==0 && $2+0 > 1.9 { ok=1 }
+  END { exit !ok }' "${AYIL_SIM_DT_DIR}/IDEM.csv" || {
+  echo "FAIL: --recompute should refresh bins from log" >&2
+  exit 1
+}
+echo "PASS: AYIL_SIM_DT_RECOMPUTE=1 refreshes existing bins"
+
+# Log starting at sim 120 must keep bins 0,60 from prior CSV.
+printf '%s\n' \
+  '# ayil_sim_dt version=3' \
+  '# date=KEEPLO bin_sec=60' \
+  'sim_bin_s,dt_s,n_lines,last_utc' \
+  '0,1.000000000,1,2020-01-01T00:00:00Z' \
+  '60,1.000000000,1,2020-01-01T00:00:00Z' \
+  '120,1.000000000,1,2020-01-01T00:00:00Z' \
+  > "${AYIL_SIM_DT_DIR}/KEEPLO.csv"
+printf '%s\n' \
+  'Time of Day: 090032.000    Time of Simulation:    120.00    dt:  2.000000000' \
+  'Time of Day: 090048.000    Time of Simulation:    180.00    dt:  2.000000000' \
+  > "${REPO_ROOT}/test/fixtures/dales_log_dt_start120.txt"
+ayil_sim_dt_merge_log "KEEPLO" "${REPO_ROOT}/test/fixtures/dales_log_dt_start120.txt" "32"
+awk -F, 'BEGIN { ok0=0; ok60=0 }
+  /^#/ || /^sim_bin/ { next }
+  $1==0 && $2+0 < 1.5 { ok0=1 }
+  $1==60 && $2+0 < 1.5 { ok60=1 }
+  END { exit !(ok0 && ok60) }' "${AYIL_SIM_DT_DIR}/KEEPLO.csv" || {
+  echo "FAIL: bins before log sim_min should be preserved" >&2
+  exit 1
+}
+echo "PASS: preserves sim_dt bins below log sim_min (restart at hour 2)"
+
 ayil_sim_dt_merge_log "FAST" "${REPO_ROOT}/test/fixtures/dales_log_dt_fast.txt" "64"
 f_fast="$(ayil_sim_dt_segment_cost_factor FAST 0 120)"
 awk -v f="${f_fast}" 'BEGIN { if (f < 0.95 || f > 1.05) exit 1 }' || {

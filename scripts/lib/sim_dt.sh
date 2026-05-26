@@ -18,6 +18,8 @@ export AYIL_SIM_DT_MIN_COVERAGE_FRAC="${AYIL_SIM_DT_MIN_COVERAGE_FRAC:-0.8}"
 export AYIL_SIM_DT_USE="${AYIL_SIM_DT_USE:-1}"
 # 1 while bootstrap may write sim_dt/*.csv; set 0 after sim_dt/.corpus_complete
 export AYIL_SIM_DT_RECORD="${AYIL_SIM_DT_RECORD:-1}"
+# 0 = keep existing bins unless log adds lines for that bin; 1 = recompute every bin the log covers
+export AYIL_SIM_DT_RECOMPUTE="${AYIL_SIM_DT_RECOMPUTE:-0}"
 
 ayil_sim_dt_root() {
   echo "${AYIL_SIM_DT_DIR:-${MOSAiC_AYIL_ROOT}/sim_dt}"
@@ -41,6 +43,98 @@ ayil_sim_dt_may_record() {
     return 1
   fi
   return 0
+}
+
+# Stats from dales.log (diagnostic lines). Prints: diag_lines=N sim_log=LO-HIs
+ayil_sim_dt_log_stats() {
+  local log="$1"
+  [[ -f "${log}" ]] || return 1
+  awk '
+    /Time of Simulation:/ && /[[:space:]]dt:/ {
+      line = $0
+      pos = index(line, "Time of Simulation:")
+      rest = substr(line, pos + 19)
+      if (match(rest, /[0-9]+\.?[0-9]*/)) {
+        sim = substr(rest, RSTART, RLENGTH) + 0
+      } else next
+      n++
+      if (n == 1 || sim < smin) smin = sim
+      if (n == 1 || sim > smax) smax = sim
+    }
+    END {
+      if (n == 0) exit 1
+      printf "diag_lines=%d sim_log=%.2f-%.2fs", n, smin, smax
+    }
+  ' "${log}"
+}
+
+# Stats from sim_dt CSV. Prints: v3 bins=N sim_table=LO-HIs dt_eff=... partial|full_day
+ayil_sim_dt_csv_stats() {
+  local csv="$1"
+  local bin_sec="${AYIL_SIM_DT_BIN_SEC}"
+  local day_sec="${AYIL_DAY_RUNTIME_SEC:-10800}"
+  [[ -f "${csv}" ]] || return 1
+  awk -v bin="${bin_sec}" -v day="${day_sec}" '
+    BEGIN { FS = "," }
+    /^# ayil_sim_dt version=/ {
+      ver = $0
+      sub(/^# ayil_sim_dt version=/, "", ver)
+      next
+    }
+    /^#/ { next }
+    /^sim_bin/ { next }
+    {
+      b = $1 + 0
+      dt = $2 + 0
+      if (dt <= 0) next
+      nb++
+      if (nb == 1 || b < bmin) bmin = b
+      if (nb == 1 || b > bmax) bmax = b
+      if (nb == 1 || dt < dtmin) dtmin = dt
+      if (nb == 1 || dt > dtmax) dtmax = dt
+    }
+    END {
+      if (nb == 0) exit 1
+      hi = bmax + bin
+      status = (hi >= day - 1) ? "full_day" : "partial"
+      printf "v%s bins=%d sim_table=%d-%ds dt_eff=%.3f-%.3fs %s", \
+        ver, nb, bmin, hi, dtmin, dtmax, status
+    }
+  ' "${csv}"
+}
+
+# Compare prior vs new CSV one-liners (ingest logging).
+ayil_sim_dt_stats_delta() {
+  local old="$1"
+  local new="$2"
+  awk -v old="${old}" -v new="${new}" '
+    function hi_span(s,   t, x) {
+      if (!match(s, /sim_table=[0-9]+-[0-9]+/)) return -1
+      t = substr(s, RSTART, RLENGTH)
+      sub(/^sim_table=/, "", t)
+      sub(/s$/, "", t)
+      split(t, x, "-")
+      return x[2] + 0
+    }
+  function lo_span(s,   t, x) {
+      if (!match(s, /sim_table=[0-9]+-[0-9]+/)) return -1
+      t = substr(s, RSTART, RLENGTH)
+      sub(/^sim_table=/, "", t)
+      sub(/s$/, "", t)
+      split(t, x, "-")
+      return x[1] + 0
+    }
+    BEGIN {
+      olo = lo_span(old); ohi = hi_span(old)
+      nlo = lo_span(new); nhi = hi_span(new)
+      if (olo < 0 || nlo < 0) exit 0
+      if (olo == nlo && ohi == nhi) {
+        print "    delta: same sim_table span (CSV rebuilt from full dales.log; dt values may differ)"
+      } else {
+        printf "    delta: sim_table %d-%ds -> %d-%ds\n", olo, ohi, nlo, nhi
+      }
+    }
+  '
 }
 
 # Parse dales.log lines: sim_s dt_s [wall_hms]
@@ -77,6 +171,13 @@ ayil_sim_dt_parse_log_to_tsv() {
   ' "${log}"
 }
 
+# Compare data rows only (ignore header timestamps). Exit 0 if equal.
+ayil_sim_dt_csv_body_equal() {
+  local a="$1"
+  local b="$2"
+  diff -q <(awk '/^sim_bin_s,/{p=1} p' "${a}") <(awk '/^sim_bin_s,/{p=1} p' "${b}") >/dev/null 2>&1
+}
+
 # Merge log into binned CSV (bootstrap). No-op when recording is disabled or corpus is frozen.
 ayil_sim_dt_merge_log() {
   local date="$1"
@@ -94,10 +195,40 @@ ayil_sim_dt_merge_log() {
 
   awk -v bin="${bin_sec}" -v date="${date}" -v nproc="${nproc}" \
     -v ref="${AYIL_SIM_DT_REF_SEC}" \
+    -v recompute_all="${AYIL_SIM_DT_RECOMPUTE:-0}" \
     -v utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -v host="$(hostname -s 2>/dev/null || hostname)" \
+    -v existing="${csv}" \
     '
     function bin_of(sim) { return int(sim / bin) * bin }
+
+    # Recompute from log only for new bins, denser log coverage, or explicit recompute_all.
+    function should_recompute_from_log(b) {
+      if (step_units[b] <= 0) return 0
+      if (!(b in saved_dt)) return 1
+      if (recompute_all + 0 == 1) return 1
+      if ((b in n_lines) && n_lines[b] > saved_nlines[b]) return 1
+      return 0
+    }
+
+    BEGIN {
+      FS = ","
+      saved_min_bin = -1
+      saved_max_bin = -1
+      if (existing != "" && (getline < existing) > 0) {
+        while ((getline < existing) > 0) {
+          if ($0 ~ /^#/ || $0 ~ /^sim_bin/) continue
+          b = $1 + 0
+          if ($2 + 0 <= 0) continue
+          saved_dt[b] = $2 + 0
+          saved_nlines[b] = ($3 + 0)
+          saved_utc[b] = $4
+          if (saved_min_bin < 0 || b < saved_min_bin) saved_min_bin = b
+          if (b > saved_max_bin) saved_max_bin = b
+        }
+        close(existing)
+      }
+    }
 
     # Interval (lo, hi] used mean dt from the diagnostic line ending at hi.
     function add_interval(lo, hi, dt,    b, seg_lo, seg_hi, w) {
@@ -125,6 +256,14 @@ ayil_sim_dt_merge_log() {
         dt = substr(rest2, RSTART, RLENGTH) + 0
       } else next
       if (sim < 0 || dt <= 0) next
+      if (!have_log) {
+        log_smin = sim
+        log_smax = sim
+        have_log = 1
+      } else {
+        if (sim < log_smin) log_smin = sim
+        if (sim > log_smax) log_smax = sim
+      }
       if (have_prev && sim > prev_sim) {
         add_interval(prev_sim, sim, dt)
       }
@@ -137,6 +276,18 @@ ayil_sim_dt_merge_log() {
     }
 
     END {
+      if (have_log && saved_max_bin >= 0) {
+        if (log_smin > saved_min_bin + 0.001) {
+          printf "WARN ayil_sim_dt %s: dales.log starts at sim %.2fs (table had from %ds); " \
+            "keeping earlier bins from prior sim_dt/CSV\n", \
+            date, log_smin, saved_min_bin > "/dev/stderr"
+        }
+        if (log_smax < saved_max_bin + bin - 1) {
+          printf "WARN ayil_sim_dt %s: dales.log ends at sim %.2fs (table had to %ds); " \
+            "keeping later bins from prior sim_dt/CSV\n", \
+            date, log_smax, saved_max_bin + bin > "/dev/stderr"
+        }
+      }
       printf "# ayil_sim_dt version=3\n"
       printf "# date=%s bin_sec=%d dt_ref_sec=%s host=%s nproc=%s updated_utc=%s\n", \
         date, bin, ref, host, nproc, utc
@@ -145,6 +296,7 @@ ayil_sim_dt_merge_log() {
       nb = 0
       for (b in step_units) seen[b] = 1
       for (b in n_lines) seen[b] = 1
+      for (b in saved_dt) seen[b] = 1
       for (b in seen) {
         nb++
         bins[nb] = b + 0
@@ -160,19 +312,41 @@ ayil_sim_dt_merge_log() {
       }
       for (i = 1; i <= nb; i++) {
         b = bins[i]
-        if (step_units[b] > 0) {
+        out_nlines = 0
+        out_utc = utc
+        if (should_recompute_from_log(b)) {
           dt_eff = sim_cover[b] / step_units[b]
+          out_nlines = n_lines[b] + 0
+          if (b in last_utc) out_utc = last_utc[b]
+          if (b in saved_dt) n_recomputed++
+          else n_added++
+        } else if (b in saved_dt) {
+          dt_eff = saved_dt[b]
+          out_nlines = saved_nlines[b]
+          out_utc = (b in saved_utc) ? saved_utc[b] : utc
+          n_preserved++
         } else if (b in last_dt) {
           dt_eff = last_dt[b]
+          out_nlines = n_lines[b]
+          out_utc = last_utc[b]
+          n_added++
         } else {
           continue
         }
-        printf "%d,%.9f,%d,%s\n", b, dt_eff, n_lines[b], last_utc[b]
+        printf "%d,%.9f,%d,%s\n", b, dt_eff, out_nlines, out_utc
+      }
+      if (n_preserved + n_recomputed + n_added > 0) {
+        printf "ayil_sim_dt merge %s: preserved=%d recomputed=%d added=%d recompute_all=%s\n", \
+          date, n_preserved, n_recomputed, n_added, recompute_all > "/dev/stderr"
       }
     }
   ' "${log}" > "${csv}.new"
 
   [[ -s "${csv}.new" ]] || { rm -f "${csv}.new"; return 0; }
+  if [[ -f "${csv}" ]] && ayil_sim_dt_csv_body_equal "${csv}" "${csv}.new"; then
+    rm -f "${csv}.new"
+    return 0
+  fi
   # -f: required when login shells alias mv -i (otherwise chunk-2+ merge can prompt/hang).
   command mv -f "${csv}.new" "${csv}"
 }
