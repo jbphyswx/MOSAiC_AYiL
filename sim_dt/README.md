@@ -20,6 +20,7 @@ sim_bin_s,dt_s,n_lines,last_utc
 
 - **`sim_bin_s`**: start of bin (seconds since cold start; default **60 s** via `AYIL_SIM_DT_BIN_SEC`).
 - **`dt_s`**: minimum `dt` in that bin (conservative for wall estimates).
+- Rows are written **ascending by `sim_bin_s`** (simulation time); scripts may scan linearly without re-sorting.
 
 ## Lifecycle
 

@@ -105,8 +105,7 @@ ayil_sim_dt_merge_log() {
           if (length(a) >= 2) {
             b = a[1] + 0
             dt_min[b] = a[2] + 0
-            n_lines[b] = (a[3] + 0)
-            last_utc[b] = a[4]
+            # n_lines recomputed from the log on each merge (cumulative dales.log is re-scanned).
           }
         } while ((getline < existing) > 0)
         close(existing)
@@ -137,16 +136,30 @@ ayil_sim_dt_merge_log() {
       printf "# date=%s bin_sec=%d dt_ref_sec=%s host=%s nproc=%s updated_utc=%s\n", \
         date, bin, ref, host, nproc, utc
       printf "sim_bin_s,dt_s,n_lines,last_utc\n"
-      nb = asorti(dt_min, sorted)
+      nb = 0
+      for (b in dt_min) {
+        nb++
+        bins[nb] = b + 0
+      }
+      for (i = 2; i <= nb; i++) {
+        key = bins[i]
+        j = i - 1
+        while (j >= 1 && bins[j] > key) {
+          bins[j + 1] = bins[j]
+          j--
+        }
+        bins[j + 1] = key
+      }
       for (i = 1; i <= nb; i++) {
-        b = sorted[i]
+        b = bins[i]
         printf "%d,%.9f,%d,%s\n", b, dt_min[b], n_lines[b], last_utc[b]
       }
     }
   ' "${log}" > "${csv}.new"
 
   [[ -s "${csv}.new" ]] || { rm -f "${csv}.new"; return 0; }
-  mv "${csv}.new" "${csv}"
+  # -f: required when login shells alias mv -i (otherwise chunk-2+ merge can prompt/hang).
+  command mv -f "${csv}.new" "${csv}"
 }
 
 # f_dt = dt_ref/dt (integration cost ~ 1/dt). Pessimistic when table missing or sparse coverage.
