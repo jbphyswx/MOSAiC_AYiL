@@ -33,6 +33,9 @@ cp scripts/env.example scripts/env.local
 | `check_prerequisites.sh` | Pre-flight dependency check |
 | `prepare_case.sh YYYYMMDD [RUN_DIR]` | Fetch Zenodo inputs if missing; copy + link `scm_in.nc`; `trestart = -1` |
 | `fetch_zenodo_inputs.sh` | Optional prefetch of Zenodo zip; adds missing artifacts only (`rsync --ignore-existing`) |
+| **`sync_runs_from_hpc.sh`** | **Pull HPC `runs/` → local (SSH login if needed, then one rsync; `--ignore-existing`)** |
+| **`convert_to_zarr.sh`** | **All `runs/YYYYMMDD` with fielddump → `data.zarr` (partial OK; refresh if fielddump grew)** |
+| `hpc_ssh_master.sh` | Optional: `start` / `status` / `stop` for `~/.ssh/ayil-hpc` socket only |
 | `run_case.sh YYYYMMDD [NPROC] [RUN_DIR]` | Full MPI simulation (single day) |
 | **`run_local.sh`** | **Local workstation: progress logs, skip-complete, interrupts** |
 | `diagnose_mpi.sh` | MPI paths, slot limits, recommended `DALES_NPROC` |
@@ -86,7 +89,9 @@ Automated checks: `test_restart_naming.sh`, `test_chunk_restart_handoff.sh`, `te
 
 Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **`--mem = ntasks×4 GiB + 16`**, **`--time` auto** from `T_fixed + T_sim×(R_ref×N_ref/N_mpi)` (defaults `R_ref=17` @ `N_ref=64`, +15% headroom, max 8 h). Override in `scripts/env.local`; see `env.example` for `AYIL_SLURM_WALL_*`.
 
-**Default submit mode is chunked:** chained jobs (`--dependency=afterok`); segment length `AYIL_CHUNK_SIM_SEC` (default **600 s** → 18 chunks/day for 10800 s). Many days submit in parallel (one chain per day). Dry-run logs `n_chunks`, `ntasks`, and **per-chunk** `--time` (1/n MPI model × optional **dt profile**). Use `--no-chunked` for one job/day only if walltime covers the full day.
+**Default submit mode is chunked:** chained jobs (`--dependency=afterok`); segment length `AYIL_CHUNK_SIM_SEC` (default **1800 s** → 6 chunks/day for 10800 s; must match `namfielddump` `dtav`). Many days submit in parallel (one chain per day). Dry-run logs `n_chunks`, `ntasks`, and **per-chunk** `--time` (1/n MPI model × optional **dt profile**). Use `--no-chunked` for one job/day only if walltime covers the full day.
+
+**Fielddump + chunks (do not skip):** [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md). **Fortran fork:** [dales_ayil/MOSAiC_AYIL_FORK.md](../dales_ayil/MOSAiC_AYIL_FORK.md). Rebuild `./scripts/build_dales.sh` after `dales_ayil` changes. Shorter chunks (300/600 s) without the fork patch yield **empty `fielddump` (`time=0`)** while `profiles` and `initdlatest` still grow.
 
 **Timestep vs sim time:** `sim_dt/YYYYMMDD.csv` in the repo tree (see [`sim_dt/README.md`](../sim_dt/README.md)). Bootstrap: chunks update CSVs on disk (`AYIL_SIM_DT_RECORD=1`); backfill `./scripts/dev/ingest_sim_dt.sh`. When complete: `sim_dt/.corpus_complete` + `AYIL_SIM_DT_RECORD=0` — production reads only, no runtime merge.
 

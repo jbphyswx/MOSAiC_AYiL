@@ -5,7 +5,7 @@
 # Seconds of simulation per day (JAMES paper: 3 h). Zenodo archives used 7200 s.
 export AYIL_DAY_RUNTIME_SEC="${AYIL_DAY_RUNTIME_SEC:-10800}"
 # Chunk length (30 min); must divide day runtime evenly for equal chunks.
-export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-600}"
+export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-1800}"
 
 # Warm-start template for chunked Slurm (not in Zenodo cold-start namoptions).
 # Must match do_writerestartfiles linkname + readrestartfiles; see scripts/lib/restart_naming.sh.

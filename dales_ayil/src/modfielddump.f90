@@ -91,7 +91,15 @@ contains
     itmin = tmin/tres
     itmax = tmax/tres
 
-    tnext      = idtav   +btime
+    ! MOSAiC_AYIL fork (see dales_ayil/MOSAiC_AYIL_FORK.md): upstream uses tnext=idtav+btime.
+    ! After warm start that skips dump boundaries when AYIL_CHUNK_SIM_SEC < dtav. Align
+    ! tnext to the next dtav boundary at or after btime (e.g. 1500 s -> 1800 s, not 3300 s).
+    if (idtav > 0) then
+      tnext = ((btime + idtav - 1_longint) / idtav) * idtav
+      if (tnext <= btime) tnext = tnext + idtav
+    else
+      tnext = idtav + btime
+    end if
     if(.not.(lfielddump)) return
     dt_lim = min(dt_lim,tnext)
 

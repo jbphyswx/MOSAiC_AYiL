@@ -2,6 +2,8 @@
 
 Repo for regenerating **full 3D DALES fielddump** output from the MOSAiC “A Year in LES” Zenodo bundle ([JAMES 10.1029/2024MS004296](https://doi.org/10.1029/2024MS004296), [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362)). Zenodo ships domain-averaged profiles; volumetric `fielddump.*.*.001.nc` tiles must be reproduced by running DALES.
 
+**DALES is a fork:** all Fortran deltas from upstream are in [dales_ayil/MOSAiC_AYIL_FORK.md](dales_ayil/MOSAiC_AYIL_FORK.md). Slurm/fielddump rules: [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md). Rebuild `dales4` after changing `dales_ayil/src/`.
+
 Human-oriented overview: [README.md](README.md). Script details: [scripts/README.md](scripts/README.md). Zarr post-processing: [python/README.md](python/README.md).
 
 ## Repository layout
@@ -109,6 +111,7 @@ From Zenodo `namoptions` (all ~190 days use the same pattern):
 | `runtime` | `10800` s | **3 h** per day (JAMES paper); `prepare_case.sh` patches staged `namoptions`. Zenodo zip still has `7200`. |
 | `trestart` | `-1` local; `0`/`−1` chunked | Local/`--no-chunked`: no restarts. Slurm chunks: `trestart=0` writes `initdlatest*` at segment end; last chunk `−1`. |
 | `namfielddump` `dtav` | `1800` s | 3D snapshots every **30 min** → **6** times per 3 h run |
+| Chunked Slurm + fielddump | See [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md) | Default `AYIL_CHUNK_SIM_SEC=1800` matches `dtav`. Shorter chunks need [modfielddump `tnext` patch](dales_ayil/MOSAiC_AYIL_FORK.md). Never claim fielddump works from mock chunk tests alone. |
 | `namfielddump` `khigh` | `200` | Vertical levels in fielddump |
 | Grid | `320×320×286` (`kmax`) | MPI tiles: `fielddump.III.JJJ.001.nc` |
 

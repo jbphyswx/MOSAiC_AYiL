@@ -1,5 +1,17 @@
 # DALES - Dutch Atmospheric Large Eddy Simulation
 
+## MOSAiC_AYIL fork (read this first)
+
+This directory is **`dales_ayil`**, not stock upstream DALES. Fortran and output schema differ.
+
+**All changes from upstream are listed in [MOSAiC_AYIL_FORK.md](MOSAiC_AYIL_FORK.md)** (including the `modfielddump.f90` warm-start / `tnext` fix required when `AYIL_CHUNK_SIM_SEC` &lt; `namfielddump` `dtav`).
+
+After `git pull`: `./scripts/build_dales.sh` from the repo root.
+
+Pipeline notes: [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md).
+
+---
+
 ## Documentation
 The following documents are included in the DALES repository (but are not fully up to date):
 

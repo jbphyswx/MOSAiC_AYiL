@@ -8,39 +8,45 @@ import sys
 import time
 from pathlib import Path
 
-from ayil.fielddump import merge_fielddump
+from ayil.fielddump import fielddump_has_snapshots, find_fielddump_tiles, merge_fielddump
 from ayil.logging_utils import human_bytes, setup_logging
 from ayil.paths import find_repo_root, resolve_output_path, resolve_run_dir
 from ayil.thermo import add_thermo_derivatives_for_run
 from zarr.codecs import BloscCodec
 
+from ayil.convert_stamps import fielddump_newer_than_zarr, fielddump_source_stamp, stamp_to_attrs
 from ayil.zarr_store import FIELDDUMP_CHUNKS_CENTER, write_dataset_zarr
 
 AYIL_COMPLETE = ".ayil_complete"
 AYIL_RUNNING = ".ayil_running"
 
 
-def _check_run_ready(run_dir: Path, *, require_complete: bool, log: logging.Logger) -> None:
+def _check_run_ready(
+    run_dir: Path,
+    *,
+    require_complete: bool,
+    allow_running: bool,
+    log: logging.Logger,
+) -> None:
     complete = run_dir / AYIL_COMPLETE
     running = run_dir / AYIL_RUNNING
 
-    if running.exists() and not complete.exists():
+    if running.exists() and not complete.exists() and not allow_running:
         raise RuntimeError(
             f"{run_dir} is still marked running ({AYIL_RUNNING}). "
-            "Wait for DALES to finish or remove the stale marker."
+            "Wait for DALES to finish, pass --allow-running, or use batch mode (skips active runs)."
         )
 
     if require_complete and not complete.exists():
         raise RuntimeError(
             f"{run_dir} has no {AYIL_COMPLETE}. "
-            "Simulation may still be in progress or failed. "
-            "Use --allow-incomplete to convert anyway (partial tiles may fail)."
+            "Partial fielddump is converted by default; use --complete-only to require the marker."
         )
 
     if complete.exists():
         log.info("Run status: %s present", AYIL_COMPLETE)
-    else:
-        log.warning("Run status: no %s (--allow-incomplete)", AYIL_COMPLETE)
+    elif not require_complete:
+        log.warning("Run status: no %s (converting available fielddump)", AYIL_COMPLETE)
 
 
 def convert_run(
@@ -54,7 +60,10 @@ def convert_run(
     flux_at_cell_centers: bool = True,
     add_thermo: bool = True,
     overwrite: bool = False,
-    require_complete: bool = True,
+    require_complete: bool = False,
+    allow_running: bool = False,
+    update_if_stale: bool = True,
+    skip_if_current: bool = False,
     consolidated: bool = True,
     codec: BloscCodec | None = None,
     log: logging.Logger | None = None,
@@ -63,7 +72,8 @@ def convert_run(
     """
     Merge fielddump tiles under ``run_dir`` and write a Zarr store.
 
-    All path resolution and progress logging happen here (not in shell).
+    By default partial days are allowed. If ``data.zarr`` exists and fielddump has
+    more time steps or newer tiles, the store is rewritten (full merge, not time-append).
     """
     log = log or logging.getLogger("ayil")
     run_dir = Path(run_dir).resolve()
@@ -72,12 +82,36 @@ def convert_run(
     if not run_dir.is_dir():
         raise FileNotFoundError(f"run directory not found: {run_dir}")
 
-    _check_run_ready(run_dir, require_complete=require_complete, log=log)
+    if not find_fielddump_tiles(run_dir, expnr=expnr):
+        raise FileNotFoundError(f"no fielddump tiles in {run_dir}")
+
+    if not fielddump_has_snapshots(run_dir, expnr=expnr):
+        raise ValueError(
+            f"fielddump tiles in {run_dir} have no time snapshots (time size 0). "
+            "The run directory is not empty, but DALES never wrote fielddump output "
+            "(failed run, incomplete sync, or simulation still at t=0)."
+        )
+
+    _check_run_ready(
+        run_dir,
+        require_complete=require_complete,
+        allow_running=allow_running,
+        log=log,
+    )
 
     if out.exists() and not overwrite:
-        raise FileExistsError(
-            f"{out} already exists; pass --overwrite to replace"
-        )
+        if skip_if_current and not fielddump_newer_than_zarr(run_dir, out, expnr=expnr):
+            log.info("Skip %s (data.zarr matches fielddump)", out)
+            return out
+        if update_if_stale and fielddump_newer_than_zarr(run_dir, out, expnr=expnr):
+            log.info("Refresh %s (fielddump newer than existing Zarr)", out)
+            overwrite = True
+        elif not update_if_stale:
+            raise FileExistsError(
+                f"{out} already exists; pass --overwrite or omit --no-update"
+            )
+
+    stamp = fielddump_source_stamp(run_dir, expnr=expnr)
 
     t0 = time.perf_counter()
     log.info("Merge fielddump tiles from %s (expnr=%s)", run_dir, expnr)
@@ -108,6 +142,8 @@ def convert_run(
             log=log,
         )
 
+    ds.attrs.update(stamp_to_attrs(stamp))
+
     log.info(
         "Write Zarr -> %s  (center chunks=%s, staggered=%s)",
         out,
@@ -134,27 +170,43 @@ def convert_run(
     return out
 
 
+def _convert_kwargs_from_args(args: argparse.Namespace) -> dict:
+    return {
+        "expnr": args.expnr,
+        "include_staggered": not args.no_staggered,
+        "include_fluxes": not args.no_fluxes,
+        "flux_at_cell_centers": not args.no_flux_centers,
+        "add_thermo": not args.no_thermo,
+        "overwrite": args.overwrite,
+        "require_complete": args.complete_only,
+        "consolidated": not args.no_consolidated,
+        "update_if_stale": not args.no_update,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Merge DALES fielddump tiles into a single Zarr store.",
+        description="Merge DALES fielddump tiles into Zarr stores under runs/YYYYMMDD/data.zarr.",
         epilog=(
-            "Primary entry point (no bash required):\n"
-            "  python -m ayil.convert runs/20200720\n"
-            "Paths relative to the repo root are resolved automatically."
+            "With no run directories, converts every runs/YYYYMMDD that has fielddump tiles:\n"
+            "  python -m ayil.convert\n"
+            "  ./scripts/convert_to_zarr.sh\n"
+            "Skips days still running; skips up-to-date data.zarr; rewrites when fielddump grew."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "run_dir",
+        "run_dirs",
+        nargs="*",
         type=Path,
-        help="Run directory (e.g. runs/20200720), relative to repo root or absolute",
+        help="Run dirs (e.g. runs/20200720). Default: all under runs/ with fielddump.",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
         default=None,
-        help="Output Zarr path (default: <run_dir>/data.zarr)",
+        help="Output Zarr path (single-run only; default <run_dir>/data.zarr)",
     )
     parser.add_argument("--expnr", default="001", help="Experiment suffix (default 001)")
     parser.add_argument(
@@ -180,12 +232,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Replace existing Zarr store",
+        help="Replace Zarr even when fielddump has not changed",
     )
     parser.add_argument(
-        "--allow-incomplete",
+        "--no-update",
         action="store_true",
-        help=f"Do not require {AYIL_COMPLETE} before converting",
+        help="Do not refresh existing data.zarr when fielddump grew (still create missing)",
+    )
+    parser.add_argument(
+        "--complete-only",
+        action="store_true",
+        help=f"Only convert runs with {AYIL_COMPLETE}",
+    )
+    parser.add_argument(
+        "--allow-running",
+        action="store_true",
+        help=f"Allow convert while {AYIL_RUNNING} is set (batch mode skips these by default)",
     )
     parser.add_argument(
         "--no-consolidated",
@@ -208,12 +270,60 @@ def main(argv: list[str] | None = None) -> int:
         "--log-file",
         type=Path,
         default=None,
-        help="Also write logs to this file (default: runs/20200720/logs/convert.log)",
+        help="Log file (single-run: runs/YYYYMMDD/logs/convert.log; batch: runs/convert_batch.log)",
     )
     args = parser.parse_args(argv)
 
     repo_root = find_repo_root()
-    run_dir = resolve_run_dir(args.run_dir, repo_root=repo_root)
+    convert_kw = _convert_kwargs_from_args(args)
+
+    if len(args.run_dirs) > 1 and args.output is not None:
+        print("ERROR: --output is only valid for a single run directory", file=sys.stderr)
+        return 1
+
+    if len(args.run_dirs) == 0:
+        from ayil.convert_batch import convert_runs_batch, discover_run_dirs
+
+        runs_root = repo_root / "runs"
+        run_dirs = discover_run_dirs(runs_root)
+        if not run_dirs:
+            print(f"No runs with fielddump under {runs_root}", file=sys.stderr)
+            return 1
+
+        log_file = args.log_file
+        if log_file is None and not args.quiet:
+            log_file = runs_root / "convert_batch.log"
+        try:
+            log = setup_logging(verbose=args.verbose, quiet=args.quiet, log_file=log_file)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+        log.info("Batch convert: %d run(s) under %s", len(run_dirs), runs_root)
+        results = convert_runs_batch(
+            run_dirs,
+            repo_root=repo_root,
+            log=log,
+            skip_active=not args.allow_running,
+            **convert_kw,
+        )
+        n_ok = len(results["converted"]) + len(results["updated"])
+        n_fail = len(results["failed"])
+        print(
+            f"Done: {n_ok} written ({len(results['converted'])} new, "
+            f"{len(results['updated'])} refreshed), "
+            f"{len(results['skipped'])} up-to-date, "
+            f"{len(results['skipped_active'])} running, "
+            f"{len(results['skipped_no_tiles'])} no tiles, "
+            f"{len(results['skipped_no_snapshots'])} no snapshots, "
+            f"{n_fail} failed"
+        )
+        if log_file is not None:
+            print(f"Log: {log_file}", file=sys.stderr)
+        return 1 if n_fail else 0
+
+    # Single run
+    run_dir = resolve_run_dir(args.run_dirs[0], repo_root=repo_root)
     output = (
         resolve_output_path(args.output, run_dir=run_dir, repo_root=repo_root)
         if args.output is not None
@@ -241,16 +351,10 @@ def main(argv: list[str] | None = None) -> int:
         out = convert_run(
             run_dir,
             output=output,
-            expnr=args.expnr,
-            include_staggered=not args.no_staggered,
-            include_fluxes=not args.no_fluxes,
-            flux_at_cell_centers=not args.no_flux_centers,
-            add_thermo=not args.no_thermo,
-            overwrite=args.overwrite,
-            require_complete=not args.allow_incomplete,
-            consolidated=not args.no_consolidated,
-            log=log,
+            allow_running=args.allow_running,
             repo_root=repo_root,
+            log=log,
+            **convert_kw,
         )
     except (FileNotFoundError, FileExistsError, RuntimeError, OSError, ValueError) as exc:
         log.error("%s", exc)

@@ -44,6 +44,25 @@ def find_fielddump_tiles(run_dir: Path, expnr: str = "001") -> list[Path]:
     return tiles
 
 
+def fielddump_n_time(run_dir: Path, *, expnr: str = "001") -> int:
+    """
+    Number of fielddump time indices in a representative MPI tile.
+
+    Returns 0 when tiles exist but contain no snapshots (failed or incomplete run).
+    """
+    tiles = find_fielddump_tiles(run_dir, expnr=expnr)
+    if not tiles:
+        return 0
+    rep = tiles[len(tiles) // 2]
+    with xr.open_dataset(rep, engine="netcdf4") as ds:
+        return int(ds.sizes.get("time", 0))
+
+
+def fielddump_has_snapshots(run_dir: Path, *, expnr: str = "001") -> bool:
+    """True when at least one fielddump time step is present."""
+    return fielddump_n_time(run_dir, expnr=expnr) > 0
+
+
 def parse_tile_index(path: Path) -> tuple[int, int]:
     m = FIELDDUMP_PATTERN.match(path.name)
     if m is None:

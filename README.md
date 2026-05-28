@@ -14,6 +14,14 @@ Zenodo provides **profile-averaged** outputs; full horizontal fields require rer
 - **Slurm (default):** `./scripts/slurm_submit.sh --pending` submits **6 chained jobs per day** (30 min sim each, `AYIL_CHUNK_SIM_SEC=1800`) so each job stays within typical **8 h wall** limits. Chunks warm-start from `initdlatest*`; timed restart files are deleted after each successful chunk; the last chunk does not write restarts. Many days can run in parallel (separate chains). Use `--no-chunked` only if your partition allows one job to finish the full 3 h simulation in walltime.
 - **MPI ranks:** default **64** on Slurm (`AYIL_SLURM_NTASKS`); override in `scripts/env.local`.
 
+### Fielddump + chunks (required reading)
+
+**[`docs/fielddump_and_chunking.md`](docs/fielddump_and_chunking.md)** — why `profiles` can look fine while `fielddump` has `time=0`, and how chunk length relates to `dtav`.
+
+**[`dales_ayil/MOSAiC_AYIL_FORK.md`](dales_ayil/MOSAiC_AYIL_FORK.md)** — **explicit list of Fortran changes** from upstream DALES (including `modfielddump.f90`). Rebuild with `./scripts/build_dales.sh` after pull.
+
+**Do not** use `AYIL_CHUNK_SIM_SEC` &lt; **1800** unless you have rebuilt `dales4` from this repo’s `dales_ayil` (see fork doc). Values like **300** or **600** with stock `tnext = btime + dtav` produce **empty fielddump** while the LES still runs to completion.
+
 ## Reproduce everything (start here)
 
 ```bash

@@ -3,11 +3,15 @@
 # All path resolution, progress, and logging live in Python (see ayil/convert.py).
 #
 # Usage:
-#   convert_to_zarr.sh runs/20200720
+#   convert_to_zarr.sh                    # all runs/YYYYMMDD with fielddump
+#   convert_to_zarr.sh runs/20200720      # one day
 #   convert_to_zarr.sh runs/20200720 --overwrite -v
 #
+# Default: partial days OK; skip running days; skip up-to-date data.zarr;
+# refresh when fielddump has more time steps or newer tiles (full rewrite).
+#
 # Equivalent:
-#   cd python && conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720
+#   cd python && conda run -n MOSAiC_AYIL python -m ayil.convert
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

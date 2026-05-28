@@ -2,6 +2,8 @@
 
 Merge DALES `fielddump.*.*.001.nc` MPI tiles into a single [Zarr](https://zarr.dev/) store per run day.
 
+**Prerequisite:** tiles must have `time > 0` (see [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md) and [dales_ayil/MOSAiC_AYIL_FORK.md](../dales_ayil/MOSAiC_AYIL_FORK.md)).
+
 ## Environment (conda-forge)
 
 Uses the **`MOSAiC_AYIL`** conda env:
@@ -12,9 +14,12 @@ conda env update -n MOSAiC_AYIL -f python/environment.yml
 
 Dependencies: `xarray`, `zarr`, `netcdf4`, `pytest` (all from conda-forge). Compression uses `zarr.codecs.BloscCodec` (Zarr v3 API), not `numcodecs` in encoding.
 
-## Convert one run (after simulation completes)
+## Convert fielddump → Zarr
 
 ```bash
+./scripts/convert_to_zarr.sh
+# all runs/YYYYMMDD with fielddump tiles
+
 ./scripts/convert_to_zarr.sh runs/20200720
 # -> runs/20200720/data.zarr/
 ```
@@ -23,16 +28,17 @@ Dependencies: `xarray`, `zarr`, `netcdf4`, `pytest` (all from conda-forge). Comp
 
 ```bash
 cd python
-conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720
+conda run -n MOSAiC_AYIL python -m ayil.convert
 conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720 -v --overwrite
 ```
 
-- Resolves `runs/YYYYMMDD` relative to the repo root (no bash path hacks).
-- Logs to stderr and `runs/YYYYMMDD/logs/convert.log` by default.
-- Per-tile progress at INFO; use `-v` for DEBUG.
-- Requires `.ayil_complete` unless `--allow-incomplete`.
+- **Default batch:** every `runs/YYYYMMDD` with `fielddump.*.*.001.nc`.
+- **Partial days:** converted without `.ayil_complete` (whatever snapshots exist).
+- **Skips** days marked `.ayil_running` (still simulating).
+- **Skips** `data.zarr` that already matches fielddump; **rewrites** when fielddump gained time steps or newer tiles (full merge, not incremental append along time).
+- Batch log: `runs/convert_batch.log`; single-day log: `runs/YYYYMMDD/logs/convert.log`.
 
-Options: `--help` (`--no-staggered`, `--no-thermo`, `--no-consolidated`, `--overwrite`, `-q`, `--log-file`, …).
+Options: `--help` (`--complete-only`, `--no-update`, `--overwrite`, `--no-staggered`, …).
 
 By default the converter adds **`pressure`** `(z)`, **`exner`** `(z)`, and **`temperature`** `(time, z, y, x)`. If rebuilt `dales4` wrote them in fielddump (`presf`, `exnf`, `tmp0`), those are used; otherwise `ayil.thermo` computes them offline (`fromztop` + `T = exner * thl + (L_v/c_p) * ql`, needs `namoptions` and `prof.inp.<expnr>`).
 
