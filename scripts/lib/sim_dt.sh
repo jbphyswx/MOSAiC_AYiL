@@ -15,7 +15,9 @@ export AYIL_SIM_DT_REF_SEC="${AYIL_SIM_DT_REF_SEC:-2.0}"
 # Pessimistic cap when sim_dt/DATE.csv is missing or does not cover the chunk window.
 export AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC:-0.6}"
 export AYIL_SIM_DT_MIN_COVERAGE_FRAC="${AYIL_SIM_DT_MIN_COVERAGE_FRAC:-0.8}"
-export AYIL_SIM_DT_USE="${AYIL_SIM_DT_USE:-1}"
+# Walltime: off by default — R_ref must be calibrated with estimate_wall_ref.sh first;
+# enabling f_dt without matching AYIL_SIM_DT_REF_SEC to that run double-counts (see slurm_defaults.sh).
+export AYIL_SIM_DT_USE="${AYIL_SIM_DT_USE:-0}"
 # 1 while bootstrap may write sim_dt/*.csv; set 0 after sim_dt/.corpus_complete
 export AYIL_SIM_DT_RECORD="${AYIL_SIM_DT_RECORD:-1}"
 # 0 = keep existing bins unless log adds lines for that bin; 1 = recompute every bin the log covers

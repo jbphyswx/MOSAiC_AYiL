@@ -157,9 +157,10 @@ awk -v f="${f_slow}" 'BEGIN { if (f < 2.5 || f > 3.0) exit 1 }' || {
 echo "PASS: SLOW sim_dt factor=${f_slow}"
 
 export AYIL_SLURM_WALL_FIXED_SEC=0
-export AYIL_SLURM_WALL_REF_PER_SIM_SEC=17
+export AYIL_SLURM_WALL_REF_PER_SIM_SEC=14
 export AYIL_SLURM_WALL_REF_NTASKS=64
 export AYIL_SLURM_NTASKS=64
+export AYIL_SIM_DT_USE=1
 export AYIL_WALL_DATE=SLOW
 export AYIL_WALL_SIM_LO=0
 export AYIL_WALL_SIM_HI=120

@@ -2,7 +2,7 @@
 # Estimate integration wall/sim from runs/YYYYMMDD/logs/progress.log (+ optional dales.log mean dt).
 #
 # Use the printed AYIL_SLURM_WALL_REF_* suggestion in env.local after a representative
-# finished chunk (same ntasks and case as production). This replaces guessing R_ref=17.
+# finished chunk (same ntasks and case as production). Replaces the repo default R_ref.
 #
 # Usage:
 #   ./scripts/dev/estimate_wall_ref.sh 20191101

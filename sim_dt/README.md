@@ -43,7 +43,7 @@ Create `sim_dt/.corpus_complete` (one `YYYYMMDD` per line) when every production
 |----------|---------|------|
 | `AYIL_SIM_DT_DIR` | `$MOSAiC_AYIL_ROOT/sim_dt` | Directory for CSVs |
 | `AYIL_SIM_DT_RECORD` | `1` | `0` = production does not write CSVs |
-| `AYIL_SIM_DT_USE` | `1` | `0` = ignore tables for walltime |
+| `AYIL_SIM_DT_USE` | `0` | `1` = multiply wall by ⟨dt_ref/dt⟩ from CSV (only after R_ref/dt_ref co-calibrated) |
 | `AYIL_SIM_DT_REF_SEC` | `2.0` | Pivot for `f_dt = dt_ref/dt` (not “the dt when R_ref was measured” unless you set it from `estimate_wall_ref.sh`) |
 | `AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC` | `0.6` | Only when **no** table or **sparse** chunk coverage: assume effective `dt` this small → `f_dt = dt_ref / this` |
 | `AYIL_SIM_DT_MIN_COVERAGE_FRAC` | `0.8` | Fraction of chunk sim window bins must be covered else bump to pessimistic `f_dt` |
