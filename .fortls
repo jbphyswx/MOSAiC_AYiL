@@ -1,0 +1,9 @@
+# Fortran language-server (fortls) config for AYIL DALES.
+# modglobal.mod (and other .mod files) are generated under build/, not beside src/.
+# Run ./scripts/build_dales.sh once so these directories exist.
+---
+include_dirs:
+  - dales_ayil/build/src/program_modules
+  - dales_ayil/build/src/library_modules
+source_dirs:
+  - dales_ayil/src
