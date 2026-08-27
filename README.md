@@ -1,6 +1,6 @@
 # MOSAiC_AYiL
 
-Regenerate full 3D/4D DALES output for [Schnierstein et al. 2024 (JAMES)](https://doi.org/10.1029/2024MS004296) / [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362).
+Utilities for working with, processing, and regenerating full 3D/4D DALES output for [Schnierstein et al. 2024 (JAMES)](https://doi.org/10.1029/2024MS004296) / [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362).
 
 Zenodo provides **profile-averaged** outputs; full horizontal fields require rerunning DALES with the archived inputs.
 
