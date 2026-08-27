@@ -5,9 +5,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/test_framework.sh
 source "${REPO_ROOT}/test/lib/test_framework.sh"
 
-export AYIL_SKIP_MPI_AUTO=1
+export AYiL_SKIP_MPI_AUTO=1
 export DALES_NPROC=4
-export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
+export MOSAiC_AYiL_ROOT="${REPO_ROOT}"
 export MPIRUN="${REPO_ROOT}/test/fixtures/bin/mock_mpirun"
 chmod +x "${MPIRUN}"
 export MOCK_MPI_MAX_SLOTS=16
@@ -16,11 +16,11 @@ SCRIPTS="${REPO_ROOT}/scripts"
 TEST_RUNS="${REPO_ROOT}/test/tmp_runs"
 rm -rf "${TEST_RUNS}"
 mkdir -p "${TEST_RUNS}"
-export AYIL_RUNS="${TEST_RUNS}"
+export AYiL_RUNS="${TEST_RUNS}"
 
 # --- bootstrap ---
 assert_true "${SCRIPTS}/bootstrap_build_tree.sh" "bootstrap_build_tree"
-assert_file_exists "${REPO_ROOT}/dales_ayil/CMakeLists.txt"
+assert_file_exists "${REPO_ROOT}/MOSAiC_AYiL/CMakeLists.txt"
 
 # --- prepare (use real ayil input if present) ---
 INPUT_DATE="20200720"
@@ -51,7 +51,7 @@ fi
 if [[ -n "${RUN_DIR:-}" && -d "${RUN_DIR}" ]]; then
   # shellcheck source=../../scripts/lib/run_status.sh
   source "${REPO_ROOT}/scripts/lib/run_status.sh"
-  touch "${RUN_DIR}/${AYIL_STATUS_COMPLETE}"
+  touch "${RUN_DIR}/${AYiL_STATUS_COMPLETE}"
   out=$("${SCRIPTS}/run_local.sh" --dry-run "${INPUT_DATE}" 2>&1) || true
   echo "${out}" | grep -q "SKIP" && test_pass || test_fail "skip complete day"
 fi

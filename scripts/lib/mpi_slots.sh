@@ -2,12 +2,12 @@
 # Open MPI slot detection and rank sizing for DALES (grid must divide 320).
 
 # Valid MPI task counts for itot=jtot=320 (descending).
-AYIL_GRID_FACTORS=(320 160 80 64 40 32 20 16 10 8 5 4 2 1)
+AYiL_GRID_FACTORS=(320 160 80 64 40 32 20 16 10 8 5 4 2 1)
 
 ayil_largest_grid_factor_le() {
   local cap="$1"
   local f
-  for f in "${AYIL_GRID_FACTORS[@]}"; do
+  for f in "${AYiL_GRID_FACTORS[@]}"; do
     if (( f <= cap )); then
       echo "${f}"
       return 0
@@ -18,7 +18,7 @@ ayil_largest_grid_factor_le() {
 
 # Probe max ranks Open MPI accepts among valid DALES grid factors (divisors of 320).
 ayil_mpi_probe_max_slots() {
-  local cap="${AYIL_MPI_MAX_SLOTS:-${AYIL_MAX_SLOTS:-}}"
+  local cap="${AYiL_MPI_MAX_SLOTS:-${AYiL_MAX_SLOTS:-}}"
   if [[ -n "${cap}" ]]; then
     ayil_largest_grid_factor_le "${cap}"
     return 0
@@ -28,9 +28,9 @@ ayil_mpi_probe_max_slots() {
     return 0
   fi
   local n
-  for n in "${AYIL_GRID_FACTORS[@]}"; do
+  for n in "${AYiL_GRID_FACTORS[@]}"; do
     # shellcheck disable=SC2086
-    if "${MPIRUN}" ${AYIL_MPIRUN_EXTRA:-} -np "${n}" /bin/true &>/dev/null; then
+    if "${MPIRUN}" ${AYiL_MPIRUN_EXTRA:-} -np "${n}" /bin/true &>/dev/null; then
       echo "${n}"
       return 0
     fi

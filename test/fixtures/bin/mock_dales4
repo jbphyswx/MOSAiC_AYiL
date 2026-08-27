@@ -21,7 +21,7 @@ RUNTIME="$(ayil_read_runtime "${NAMOPTIONS}")"
   exit 1
 }
 
-NPROC="${AYIL_MOCK_NPROC:-4}"
+NPROC="${AYiL_MOCK_NPROC:-4}"
 LWARM=0
 if grep -qE '^[[:space:]]*lwarmstart[[:space:]]*=[[:space:]]*\.true\.' "${NAMOPTIONS}"; then
   LWARM=1

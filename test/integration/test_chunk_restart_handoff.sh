@@ -39,7 +39,7 @@ ayil_apply_chunk_namoptions "${RUN}/namoptions" 1 "${N_CHUNKS}" "${CHUNK_SEC}" "
 grep -q 'lwarmstart = .true.' "${RUN}/namoptions" || test_fail "chunk 1 warm start"
 
 startfile="$(grep -E "^[[:space:]]*startfile" "${RUN}/namoptions" | sed -E "s/.*'([^']+)'.*/\1/")"
-[[ "${startfile}" == "${AYIL_RESTART_STARTFILE}" ]] || test_fail "startfile not AYIL_RESTART_STARTFILE"
+[[ "${startfile}" == "${AYiL_RESTART_STARTFILE}" ]] || test_fail "startfile not AYiL_RESTART_STARTFILE"
 
 missing=0
 while read -r cid; do

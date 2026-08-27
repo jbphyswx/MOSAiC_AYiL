@@ -14,7 +14,7 @@ from ayil.fluxes import (
     add_cell_center_fluxes,
     add_missing_fluxes,
 )
-from ayil.scalar_names import AYIL_SB3_SCALAR_LONG_NAMES, rename_scalar_variables
+from ayil.scalar_names import AYiL_SB3_SCALAR_LONG_NAMES, rename_scalar_variables
 
 FIELDDUMP_PATTERN = re.compile(
     r"^fielddump\.(?P<ix>\d{3})\.(?P<iy>\d{3})\.(?P<exp>\d{3})\.nc$"
@@ -87,7 +87,7 @@ def _combine_mpi_tiles(
     """
     Stitch MPI tiles: concat along ``x_dim`` within a row, then along ``y_dim``.
 
-    AYIL production runs use y-only decomposition (``ix`` fixed, ``iy`` 0–39).
+    AYiL production runs use y-only decomposition (``ix`` fixed, ``iy`` 0–39).
     General enough for test fixtures with 2×2 tiling.
     """
     if not parts:
@@ -146,9 +146,9 @@ def _rename_scalars_in_dataset(ds: xr.Dataset) -> xr.Dataset:
         return ds
     out = ds.rename(renames)
     for old_name, new_name in renames.items():
-        if new_name in AYIL_SB3_SCALAR_LONG_NAMES:
+        if new_name in AYiL_SB3_SCALAR_LONG_NAMES:
             out[new_name].attrs.setdefault(
-                "long_name", AYIL_SB3_SCALAR_LONG_NAMES[new_name]
+                "long_name", AYiL_SB3_SCALAR_LONG_NAMES[new_name]
             )
         out[new_name].attrs.setdefault("units", "kg kg-1")
         out[new_name].attrs["dales_fielddump_name"] = old_name

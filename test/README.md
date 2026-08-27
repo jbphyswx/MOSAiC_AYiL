@@ -1,4 +1,4 @@
-# MOSAiC_AYIL tests
+# MOSAiC_AYiL tests
 
 ```bash
 ./test/run_tests.sh

@@ -1,15 +1,15 @@
-# AYIL Python post-processing
+# AYiL Python post-processing
 
 Merge DALES `fielddump.*.*.001.nc` MPI tiles into a single [Zarr](https://zarr.dev/) store per run day.
 
-**Prerequisite:** tiles must have `time > 0` (see [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md) and [dales_ayil/MOSAiC_AYIL_FORK.md](../dales_ayil/MOSAiC_AYIL_FORK.md)).
+**Prerequisite:** tiles must have `time > 0` (see [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md) and [MOSAiC_AYiL/MOSAiC_AYiL_FORK.md](../MOSAiC_AYiL/MOSAiC_AYiL_FORK.md)).
 
 ## Environment (conda-forge)
 
-Uses the **`MOSAiC_AYIL`** conda env:
+Uses the **`MOSAiC_AYiL`** conda env:
 
 ```bash
-conda env update -n MOSAiC_AYIL -f python/environment.yml
+conda env update -n MOSAiC_AYiL -f python/environment.yml
 ```
 
 Dependencies: `xarray`, `zarr`, `netcdf4`, `pytest` (all from conda-forge). Compression uses `zarr.codecs.BloscCodec` (Zarr v3 API), not `numcodecs` in encoding.
@@ -28,8 +28,8 @@ Dependencies: `xarray`, `zarr`, `netcdf4`, `pytest` (all from conda-forge). Comp
 
 ```bash
 cd python
-conda run -n MOSAiC_AYIL python -m ayil.convert
-conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720 -v --overwrite
+conda run -n MOSAiC_AYiL python -m ayil.convert
+conda run -n MOSAiC_AYiL python -m ayil.convert runs/20200720 -v --overwrite
 ```
 
 - **Default batch:** every `runs/YYYYMMDD` with `fielddump.*.*.001.nc`.
@@ -48,7 +48,7 @@ Programmatic API: `convert_run(..., consolidated=True)` and `write_dataset_zarr(
 
 See the root [README.md](../README.md#simulation-length-paper-vs-zenodo-configs) for the **2 h vs 3 h** discrepancy between Zenodo `namoptions` and the JAMES paper.
 
-Predetermined for the AYIL domain (`320×320` horizontal, `200` vertical levels, `1800 s` fielddump cadence, `6` dumps per `10800 s` run):
+Predetermined for the AYiL domain (`320×320` horizontal, `200` vertical levels, `1800 s` fielddump cadence, `6` dumps per `10800 s` run):
 
 | Dim | Chunk | Tiles |
 |-----|-------|-------|
@@ -63,7 +63,7 @@ Predetermined for the AYIL domain (`320×320` horizontal, `200` vertical levels,
 
 ```bash
 cd python
-conda run -n MOSAiC_AYIL pytest
+conda run -n MOSAiC_AYiL pytest
 ```
 
 Tests use synthetic NetCDF tiles only (no live run required).
@@ -82,7 +82,7 @@ Stores are **Zarr v3** with Blosc (zstd, bitshuffle) via `zarr.codecs.BloscCodec
 `wtemp` is total **temperature** flux (`exner * wthlt + (L_v/c_p) * wqlt`, same as DALES `t0h` chain). `wqit` is total **ice mixing ratio** flux (SB3 `q_ice` / `sv008`). `wthvt` is buoyancy (virtual θ) flux. If tiles only have `wqtt`/`wthlt`/`wqlt`, convert derives `wtemp` offline; `wqit` still needs a re-run. Re-run after updating `modfielddump.f90`.
 | Staggered winds | `u`, `v`, `w` (MPI tiles stitched) | `u`: `(time, z, y, xu)`; `v`: `(time, z, yv, x)`; `w`: `(time, zw, y, x)` |
 
-Passive tracers from `sv001`–`sv012` in NetCDF are renamed to SB3 bulk micro names (e.g. `n_rain`, `q_rain`, …) per `ayil/scalar_names.py` and `dales_ayil/src/modmicrodata3.f90`.
+Passive tracers from `sv001`–`sv012` in NetCDF are renamed to SB3 bulk micro names (e.g. `n_rain`, `q_rain`, …) per `ayil/scalar_names.py` and `MOSAiC_AYiL/src/modmicrodata3.f90`.
 
 There are **no** `u_tile_*` / per-rank variables in the store — only global merged fields and a single coordinate set (`time`, `z`, `y`, `x`, plus staggered `xu`, `yv`, `zw` when winds are included).
 

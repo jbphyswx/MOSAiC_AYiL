@@ -52,8 +52,8 @@ ayil_clean_run_outputs() {
   find "${run_dir}" -maxdepth 1 \( \
     -name 'fielddump.*.nc' -o -name 'profiles.*.nc' -o -name 'cross*.nc' -o \
     -name 'tmser*.nc' -o -name 'initd*.001' -o -name 'inits*.001' -o \
-    -name "${AYIL_STATUS_COMPLETE}" -o -name "${AYIL_STATUS_INTERRUPTED}" -o \
-    -name "${AYIL_STATUS_FAILED}" -o -name "${AYIL_STATUS_RUNNING}" -o \
+    -name "${AYiL_STATUS_COMPLETE}" -o -name "${AYiL_STATUS_INTERRUPTED}" -o \
+    -name "${AYiL_STATUS_FAILED}" -o -name "${AYiL_STATUS_RUNNING}" -o \
     -name '.ayil_chunk_*_complete' \
     \) -delete 2>/dev/null || true
   # Simulation logs only (never rm -rf logs/ — that deletes slurm.out mid-job).
@@ -75,8 +75,8 @@ ayil_slurm_tee_to_run_logs() {
   ayil_ensure_run_logs "${run_dir}"
   local out job_log
   out="$(ayil_slurm_log_out "${run_dir}")"
-  if [[ -n "${SLURM_JOB_ID:-}" && -n "${MOSAiC_AYIL_ROOT:-}" ]]; then
-    job_log="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}/.slurm_job_logs/job_${SLURM_JOB_ID}.out"
+  if [[ -n "${SLURM_JOB_ID:-}" && -n "${MOSAiC_AYiL_ROOT:-}" ]]; then
+    job_log="${AYiL_RUNS:-${MOSAiC_AYiL_ROOT}/runs}/.slurm_job_logs/job_${SLURM_JOB_ID}.out"
     mkdir -p "$(dirname "${job_log}")"
     exec > >(tee -a "${out}" "${job_log}") 2>&1
   else

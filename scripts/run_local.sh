@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run AYIL DALES simulations locally (no Slurm): one day at a time, resumable, interrupt-safe.
+# Run AYiL DALES simulations locally (no Slurm): one day at a time, resumable, interrupt-safe.
 #
 # Usage:
 #   run_local.sh 20200720 20200721          # specific dates
@@ -43,7 +43,7 @@ AUTO_NPROC=1
 PREPARE_ONLY=0
 DRY_RUN=0
 LIMIT=0
-INTERVAL="${AYIL_PROGRESS_INTERVAL:-30}"
+INTERVAL="${AYiL_PROGRESS_INTERVAL:-30}"
 MODE="run"
 DATES=()
 
@@ -85,15 +85,15 @@ if (( ok == 0 )); then
   exit 1
 fi
 # Final launch check
-if ! "${MPIRUN}" ${AYIL_MPIRUN_EXTRA:-} -np "${NPROC}" /bin/true &>/dev/null; then
+if ! "${MPIRUN}" ${AYiL_MPIRUN_EXTRA:-} -np "${NPROC}" /bin/true &>/dev/null; then
   echo "ERROR: ${MPIRUN} -np ${NPROC} failed. Run: ./scripts/diagnose_mpi.sh" >&2
   exit 1
 fi
 
 if [[ "${MODE}" == "pending" && ${#DATES[@]} -eq 0 ]]; then
-  mapfile -t ALL < <(find "${AYIL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  mapfile -t ALL < <(find "${AYiL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
   for d in "${ALL[@]}"; do
-    state="$(ayil_run_state "${AYIL_RUNS}/${d}")"
+    state="$(ayil_run_state "${AYiL_RUNS}/${d}")"
     if [[ "${state}" != "complete" ]]; then
       DATES+=("${d}")
     fi
@@ -105,7 +105,7 @@ if [[ ${#DATES[@]} -eq 0 ]]; then
   usage 1
 fi
 
-# Reject YYYYMMDD that are not real AYIL Zenodo days (calendar date ≠ simulation day).
+# Reject YYYYMMDD that are not real AYiL Zenodo days (calendar date ≠ simulation day).
 FILTERED_DATES=()
 NO_INPUTS=()
 for DATE in "${DATES[@]}"; do
@@ -117,7 +117,7 @@ for DATE in "${DATES[@]}"; do
 done
 if ((${#NO_INPUTS[@]} > 0)); then
   for DATE in "${NO_INPUTS[@]}"; do
-    echo "ERROR: ${DATE} is not an AYIL input day under ${AYIL_INPUTS} (not in Zenodo bundle)" >&2
+    echo "ERROR: ${DATE} is not an AYiL input day under ${AYiL_INPUTS} (not in Zenodo bundle)" >&2
   done
   echo "Use ./scripts/list_input_dates.sh or ./scripts/slurm_submit.sh --status --pending" >&2
 fi
@@ -150,7 +150,7 @@ monitor_run() {
   start_bytes=$(ayil_dir_size_bytes "${run_dir}")
   local last_bytes="${start_bytes}"
 
-  while [[ -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; do
+  while [[ -f "${run_dir}/${AYiL_STATUS_RUNNING}" ]]; do
     sleep "${INTERVAL}"
     [[ -f "${log}" ]] || continue
     local now_bytes sim pct disk_h
@@ -170,7 +170,7 @@ monitor_run() {
 
 run_one_date() {
   local DATE="$1"
-  local RUN_DIR="${AYIL_RUNS}/${DATE}"
+  local RUN_DIR="${AYiL_RUNS}/${DATE}"
   ayil_ensure_run_logs "${RUN_DIR}"
   local LOG PROGRESS_LOG
   LOG="$(ayil_dales_log "${RUN_DIR}")"
@@ -189,7 +189,7 @@ run_one_date() {
   fi
 
   if ! ayil_day_inputs_ready "${DATE}"; then
-    log_msg "ERROR: ${DATE} is not an AYIL input day under ${AYIL_INPUTS}"
+    log_msg "ERROR: ${DATE} is not an AYiL input day under ${AYiL_INPUTS}"
     return 1
   fi
 
@@ -199,7 +199,7 @@ run_one_date() {
   fi
 
   if [[ "${state}" == "running" && "${FORCE}" -eq 0 ]]; then
-    log_msg "SKIP ${DATE} (marked running; if stale, remove ${RUN_DIR}/${AYIL_STATUS_RUNNING})"
+    log_msg "SKIP ${DATE} (marked running; if stale, remove ${RUN_DIR}/${AYiL_STATUS_RUNNING})"
     return 10
   fi
 
@@ -249,7 +249,7 @@ run_one_date() {
   (
     cd "${RUN_DIR}"
     # shellcheck disable=SC2086
-    "${MPIRUN}" ${AYIL_MPIRUN_EXTRA:-} -np "${NPROC}" "${DALES_BIN}" namoptions
+    "${MPIRUN}" ${AYiL_MPIRUN_EXTRA:-} -np "${NPROC}" "${DALES_BIN}" namoptions
   ) >>"${LOG}" 2>&1 &
   MPI_PID=$!
 

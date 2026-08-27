@@ -2,7 +2,7 @@
 # Remove build and/or run artifacts (does not touch ayil_config_input_results).
 #
 # Usage:
-#   clean.sh build          # remove dales_ayil/build
+#   clean.sh build          # remove MOSAiC_AYiL/build
 #   clean.sh runs           # remove runs/
 #   clean.sh all            # both
 set -euo pipefail
@@ -25,9 +25,9 @@ rm_build() {
 }
 
 rm_runs() {
-  if [[ -d "${AYIL_RUNS}" ]]; then
-    echo "Removing ${AYIL_RUNS}"
-    rm -rf "${AYIL_RUNS}"
+  if [[ -d "${AYiL_RUNS}" ]]; then
+    echo "Removing ${AYiL_RUNS}"
+    rm -rf "${AYiL_RUNS}"
   fi
 }
 

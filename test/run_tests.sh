@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all MOSAiC_AYIL pipeline tests (unit + integration). Always lightweight:
+# Run all MOSAiC_AYiL pipeline tests (unit + integration). Always lightweight:
 # mock MPI + mock_dales4; never launches a real 320×320 LES.
 #
 # Usage:
@@ -14,7 +14,7 @@ cd "${REPO_ROOT}"
 # shellcheck source=test/lib/test_framework.sh
 source "${REPO_ROOT}/test/lib/test_framework.sh"
 
-export AYIL_SKIP_MPI_AUTO=1
+export AYiL_SKIP_MPI_AUTO=1
 export MPIRUN="${REPO_ROOT}/test/fixtures/bin/mock_mpirun"
 export DALES_BIN="${REPO_ROOT}/test/fixtures/bin/mock_dales4"
 case "${DALES_BIN}" in

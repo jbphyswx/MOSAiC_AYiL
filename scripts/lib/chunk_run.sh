@@ -3,31 +3,31 @@
 # Source after config.sh and run_status.sh.
 
 # Seconds of simulation per day (JAMES paper: 3 h). Zenodo archives used 7200 s.
-export AYIL_DAY_RUNTIME_SEC="${AYIL_DAY_RUNTIME_SEC:-10800}"
+export AYiL_DAY_RUNTIME_SEC="${AYiL_DAY_RUNTIME_SEC:-10800}"
 # Chunk length (30 min); must divide day runtime evenly for equal chunks.
-export AYIL_CHUNK_SIM_SEC="${AYIL_CHUNK_SIM_SEC:-1800}"
+export AYiL_CHUNK_SIM_SEC="${AYiL_CHUNK_SIM_SEC:-1800}"
 
 # Warm-start template for chunked Slurm (not in Zenodo cold-start namoptions).
 # Must match do_writerestartfiles linkname + readrestartfiles; see scripts/lib/restart_naming.sh.
-AYIL_RESTART_STARTFILE="${AYIL_RESTART_STARTFILE:-initdlatestm00000001.001}"
+AYiL_RESTART_STARTFILE="${AYiL_RESTART_STARTFILE:-initdlatestm00000001.001}"
 
 # Cumulative simulation end time (s since cold start) for chunk index k.
 # Used with ltotruntime=.true. in namoptions (DALES modstartup readinitfiles).
 ayil_chunk_cumulative_runtime_sec() {
   local chunk_idx="$1"
-  local chunk_sec="${2:-${AYIL_CHUNK_SIM_SEC}}"
+  local chunk_sec="${2:-${AYiL_CHUNK_SIM_SEC}}"
   echo $(( (chunk_idx + 1) * chunk_sec ))
 }
 
 ayil_n_chunks() {
-  local day="${1:-${AYIL_DAY_RUNTIME_SEC}}"
-  local chunk="${2:-${AYIL_CHUNK_SIM_SEC}}"
+  local day="${1:-${AYiL_DAY_RUNTIME_SEC}}"
+  local chunk="${2:-${AYiL_CHUNK_SIM_SEC}}"
   if (( chunk <= 0 )); then
-    echo "ERROR: AYIL_CHUNK_SIM_SEC must be positive" >&2
+    echo "ERROR: AYiL_CHUNK_SIM_SEC must be positive" >&2
     return 1
   fi
   if (( day % chunk != 0 )); then
-    echo "ERROR: AYIL_DAY_RUNTIME_SEC=${day} must be divisible by AYIL_CHUNK_SIM_SEC=${chunk}" >&2
+    echo "ERROR: AYiL_DAY_RUNTIME_SEC=${day} must be divisible by AYiL_CHUNK_SIM_SEC=${chunk}" >&2
     return 1
   fi
   echo $(( day / chunk ))

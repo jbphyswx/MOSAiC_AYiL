@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Estimate integration wall/sim from runs/YYYYMMDD/logs/progress.log (+ optional dales.log mean dt).
 #
-# Use the printed AYIL_SLURM_WALL_REF_* suggestion in env.local after a representative
+# Use the printed AYiL_SLURM_WALL_REF_* suggestion in env.local after a representative
 # finished chunk (same ntasks and case as production). Replaces the repo default R_ref.
 #
 # Usage:
@@ -40,8 +40,8 @@ done
   exit 1
 }
 
-PROGRESS="${AYIL_RUNS}/${DATE}/logs/progress.log"
-DALES_LOG="${AYIL_RUNS}/${DATE}/logs/dales.log"
+PROGRESS="${AYiL_RUNS}/${DATE}/logs/progress.log"
+DALES_LOG="${AYiL_RUNS}/${DATE}/logs/dales.log"
 [[ -f "${PROGRESS}" ]] || {
   echo "ERROR: missing ${PROGRESS}" >&2
   exit 1
@@ -84,8 +84,8 @@ if [[ -f "${DALES_LOG}" ]]; then
   ' s0="${s0}" s1="${s1}" "${DALES_LOG}")"
 fi
 
-N_REF="${AYIL_SLURM_WALL_REF_NTASKS:-64}"
-DT_REF="${AYIL_SIM_DT_REF_SEC:-2.0}"
+N_REF="${AYiL_SLURM_WALL_REF_NTASKS:-64}"
+DT_REF="${AYiL_SIM_DT_REF_SEC:-2.0}"
 # R_ref at N_REF: rate measured at NTASKS, scaled by 1/n to reference rank count.
 r_ref="$(awk -v r="${rate}" -v n="${NTASKS}" -v nr="${N_REF}" \
   'BEGIN { printf "%.2f", r * n / nr }')"
@@ -105,12 +105,12 @@ else
 fi
 echo ""
 echo "Suggested env.local (measured @ ${NTASKS}; reference @ ${N_REF}):"
-echo "  export AYIL_SLURM_NTASKS=${NTASKS}"
-echo "  export AYIL_SLURM_WALL_REF_NTASKS=${N_REF}"
-echo "  export AYIL_SLURM_WALL_REF_PER_SIM_SEC=${r_ref}"
+echo "  export AYiL_SLURM_NTASKS=${NTASKS}"
+echo "  export AYiL_SLURM_WALL_REF_NTASKS=${N_REF}"
+echo "  export AYiL_SLURM_WALL_REF_PER_SIM_SEC=${r_ref}"
 if [[ -n "${mean_dt}" ]]; then
-  echo "  export AYIL_SIM_DT_REF_SEC=${mean_dt}   # pivot f_dt to THIS run; or keep 2.0 and use sim_dt/"
+  echo "  export AYiL_SIM_DT_REF_SEC=${mean_dt}   # pivot f_dt to THIS run; or keep 2.0 and use sim_dt/"
 fi
 echo ""
 echo "For another date with smaller dt, do NOT reuse R_ref alone — build sim_dt/YYYYMMDD.csv"
-echo "or set AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC for unknown dates."
+echo "or set AYiL_SIM_DT_PESSIMISTIC_MIN_DT_SEC for unknown dates."

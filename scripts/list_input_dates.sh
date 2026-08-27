@@ -14,7 +14,7 @@ while IFS= read -r date; do
     echo "${date}"
     count=$(( count + 1 ))
   fi
-done < <(find "${AYIL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+done < <(find "${AYiL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 
 echo "" >&2
-echo "${count} ready day(s) under ${AYIL_INPUTS}" >&2
+echo "${count} ready day(s) under ${AYiL_INPUTS}" >&2

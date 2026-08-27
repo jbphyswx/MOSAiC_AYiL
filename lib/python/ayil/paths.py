@@ -1,4 +1,4 @@
-"""Resolve MOSAiC_AYIL repo and run paths (no shell required)."""
+"""Resolve MOSAiC_AYiL repo and run paths (no shell required)."""
 
 from __future__ import annotations
 

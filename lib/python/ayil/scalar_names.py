@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # Order matches modmicrodata3.f90 indices in_hr=1 … iq_hg=12 for nsv=12 / imicro=11.
-AYIL_SB3_SCALAR_NAMES: dict[str, str] = {
+AYiL_SB3_SCALAR_NAMES: dict[str, str] = {
     "sv001": "n_rain",
     "sv002": "q_rain",
     "sv003": "n_cloud_liquid",
@@ -18,7 +18,7 @@ AYIL_SB3_SCALAR_NAMES: dict[str, str] = {
     "sv012": "q_graupel",
 }
 
-AYIL_SB3_SCALAR_LONG_NAMES: dict[str, str] = {
+AYiL_SB3_SCALAR_LONG_NAMES: dict[str, str] = {
     "n_rain": "rain drop number concentration",
     "q_rain": "rain specific mass mixing ratio",
     "n_cloud_liquid": "cloud droplet number concentration",
@@ -36,6 +36,6 @@ AYIL_SB3_SCALAR_LONG_NAMES: dict[str, str] = {
 
 def rename_scalar_variables(ds_name: str) -> str:
     """Return physical name for ``sv001``-style ``ds_name``, or pass through."""
-    if ds_name in AYIL_SB3_SCALAR_NAMES:
-        return AYIL_SB3_SCALAR_NAMES[ds_name]
+    if ds_name in AYiL_SB3_SCALAR_NAMES:
+        return AYiL_SB3_SCALAR_NAMES[ds_name]
     return ds_name

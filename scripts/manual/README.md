@@ -12,7 +12,7 @@ The automated test suite uses `test/fixtures/bin/mock_dales4` instead.
 ```bash
 ./scripts/build_dales.sh   # once
 srun --pty -n 1 -t 30 --mem=64G bash -lc '
-  cd /path/to/MOSAiC_AYIL && source scripts/setup_env.sh
+  cd /path/to/MOSAiC_AYiL && source scripts/setup_env.sh
   ./scripts/manual/smoke_test.sh 20200720 4 120
 '
 ```

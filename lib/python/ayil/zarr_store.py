@@ -14,8 +14,8 @@ from zarr.codecs import BloscCodec
 DEFAULT_BLOSC = BloscCodec(cname="zstd", clevel=3, shuffle="bitshuffle")
 
 # ---------------------------------------------------------------------------
-# AYIL fielddump grid (from namoptions: itot=jtot=320, khigh=200, runtime=10800,
-# fielddump dtav=1800). These are fixed for every MOSAiC_AYIL day in this repo.
+# AYiL fielddump grid (from namoptions: itot=jtot=320, khigh=200, runtime=10800,
+# fielddump dtav=1800). These are fixed for every MOSAiC_AYiL day in this repo.
 # ---------------------------------------------------------------------------
 FIELDDUMP_NX = 320
 FIELDDUMP_NY = 320

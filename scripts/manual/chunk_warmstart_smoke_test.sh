@@ -24,10 +24,10 @@ DATE="${1:-20200720}"
 NPROC="${2:-4}"
 CHUNK_SEC="${3:-60}"
 DAY_SEC=240
-export AYIL_DAY_RUNTIME_SEC="${DAY_SEC}"
-export AYIL_CHUNK_SIM_SEC="${CHUNK_SEC}"
+export AYiL_DAY_RUNTIME_SEC="${DAY_SEC}"
+export AYiL_CHUNK_SIM_SEC="${CHUNK_SEC}"
 N_CHUNKS="$(ayil_n_chunks)"
-RUN_DIR="${AYIL_RUNS}/chunk_smoke_${DATE}"
+RUN_DIR="${AYiL_RUNS}/chunk_smoke_${DATE}"
 TIMEOUT_SEC=600
 
 if [[ ! -x "${DALES_BIN}" ]]; then

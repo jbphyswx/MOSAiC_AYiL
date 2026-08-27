@@ -17,8 +17,8 @@ from zarr.codecs import BloscCodec
 from ayil.convert_stamps import fielddump_newer_than_zarr, fielddump_source_stamp, stamp_to_attrs
 from ayil.zarr_store import FIELDDUMP_CHUNKS_CENTER, write_dataset_zarr
 
-AYIL_COMPLETE = ".ayil_complete"
-AYIL_RUNNING = ".ayil_running"
+AYiL_COMPLETE = ".ayil_complete"
+AYiL_RUNNING = ".ayil_running"
 
 
 def _check_run_ready(
@@ -28,25 +28,25 @@ def _check_run_ready(
     allow_running: bool,
     log: logging.Logger,
 ) -> None:
-    complete = run_dir / AYIL_COMPLETE
-    running = run_dir / AYIL_RUNNING
+    complete = run_dir / AYiL_COMPLETE
+    running = run_dir / AYiL_RUNNING
 
     if running.exists() and not complete.exists() and not allow_running:
         raise RuntimeError(
-            f"{run_dir} is still marked running ({AYIL_RUNNING}). "
+            f"{run_dir} is still marked running ({AYiL_RUNNING}). "
             "Wait for DALES to finish, pass --allow-running, or use batch mode (skips active runs)."
         )
 
     if require_complete and not complete.exists():
         raise RuntimeError(
-            f"{run_dir} has no {AYIL_COMPLETE}. "
+            f"{run_dir} has no {AYiL_COMPLETE}. "
             "Partial fielddump is converted by default; use --complete-only to require the marker."
         )
 
     if complete.exists():
-        log.info("Run status: %s present", AYIL_COMPLETE)
+        log.info("Run status: %s present", AYiL_COMPLETE)
     elif not require_complete:
-        log.warning("Run status: no %s (converting available fielddump)", AYIL_COMPLETE)
+        log.warning("Run status: no %s (converting available fielddump)", AYiL_COMPLETE)
 
 
 def convert_run(
@@ -242,12 +242,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--complete-only",
         action="store_true",
-        help=f"Only convert runs with {AYIL_COMPLETE}",
+        help=f"Only convert runs with {AYiL_COMPLETE}",
     )
     parser.add_argument(
         "--allow-running",
         action="store_true",
-        help=f"Allow convert while {AYIL_RUNNING} is set (batch mode skips these by default)",
+        help=f"Allow convert while {AYiL_RUNNING} is set (batch mode skips these by default)",
     )
     parser.add_argument(
         "--no-consolidated",

@@ -22,19 +22,19 @@ ayil_should_submit_date() {
   esac
 }
 
-# Populate global array AYIL_PENDING_DATES from explicit list or all inputs.
+# Populate global array AYiL_PENDING_DATES from explicit list or all inputs.
 # Respects ayil_should_submit_date unless force includes complete days for listing.
 ayil_collect_submit_dates() {
   local force="${1:-0}"
   local mode="${2:-explicit}" # explicit | pending | all
   shift 2 || true
-  AYIL_PENDING_DATES=()
+  AYiL_PENDING_DATES=()
   local explicit=("$@")
   local candidates=()
 
   if [[ "${mode}" == "pending" || "${mode}" == "all" ]]; then
     mapfile -t candidates < <(
-      find "${AYIL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+      find "${AYiL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
     )
   else
     candidates=("${explicit[@]}")
@@ -42,9 +42,9 @@ ayil_collect_submit_dates() {
 
   local date run_dir
   for date in "${candidates[@]}"; do
-    run_dir="${AYIL_RUNS}/${date}"
+    run_dir="${AYiL_RUNS}/${date}"
     if [[ "${mode}" == "all" ]] || ayil_should_submit_date "${run_dir}" "${force}"; then
-      AYIL_PENDING_DATES+=("${date}")
+      AYiL_PENDING_DATES+=("${date}")
     fi
   done
 }

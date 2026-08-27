@@ -16,12 +16,12 @@ DATES=()
 if [[ $# -ge 1 ]]; then
   DATES=("$@")
 else
-  mapfile -t DATES < <(find "${AYIL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  mapfile -t DATES < <(find "${AYiL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 fi
 
 printf "%-12s %-12s %-10s %-8s %s\n" "DATE" "STATE" "DISK" "LOGS" "NOTES"
 for DATE in "${DATES[@]}"; do
-  RUN_DIR="${AYIL_RUNS}/${DATE}"
+  RUN_DIR="${AYiL_RUNS}/${DATE}"
   state="$(ayil_run_state "${RUN_DIR}")"
   disk="-"
   logs="-"
@@ -33,8 +33,8 @@ for DATE in "${DATES[@]}"; do
     elif [[ -f "$(ayil_dales_log "${RUN_DIR}")" ]]; then
       logs="dales"
     fi
-    for m in "${AYIL_STATUS_FAILED}" "${AYIL_STATUS_RUNNING}" "${AYIL_STATUS_INTERRUPTED}" \
-      "${AYIL_STATUS_COMPLETE}"; do
+    for m in "${AYiL_STATUS_FAILED}" "${AYiL_STATUS_RUNNING}" "${AYiL_STATUS_INTERRUPTED}" \
+      "${AYiL_STATUS_COMPLETE}"; do
       if [[ -f "${RUN_DIR}/${m}" ]]; then
         notes="${notes:+$notes,}${m}"
       fi
@@ -57,4 +57,4 @@ echo "States: missing | prepared | running | interrupted | failed | partial | co
 echo "Slurm/local logs: runs/YYYYMMDD/logs/slurm.out  (always check here first on HPC)"
 echo "  backup: runs/.slurm_job_logs/job_<SLURM_JOB_ID>.out  (if slurm.out was wiped — fixed in repo)"
 echo "  tail runs/YYYYMMDD/logs/slurm.out   dales: runs/YYYYMMDD/logs/dales.log"
-echo "Complete runs have ${AYIL_STATUS_COMPLETE} and are skipped unless --force"
+echo "Complete runs have ${AYiL_STATUS_COMPLETE} and are skipped unless --force"

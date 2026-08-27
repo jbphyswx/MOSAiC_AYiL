@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export AYIL_SKIP_MPI_AUTO=1
+export AYiL_SKIP_MPI_AUTO=1
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
 # shellcheck source=lib/hpc_ssh.sh

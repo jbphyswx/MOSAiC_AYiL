@@ -19,7 +19,7 @@ cat > namoptions <<'EOF'
 /
 EOF
 
-export AYIL_MOCK_NPROC=4
+export AYiL_MOCK_NPROC=4
 out="$("${MOCK}" namoptions 2>&1)" || {
   echo "FAIL: cold+trestart mock run: ${out}" >&2
   exit 1

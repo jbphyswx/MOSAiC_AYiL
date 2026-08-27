@@ -6,9 +6,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${REPO_ROOT}/test/lib/test_framework.sh"
 
 (
-  export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
-  export AYIL_HPC_HOST=login.hpc.caltech.edu
-  export AYIL_HPC_USER=testuser
+  export MOSAiC_AYiL_ROOT="${REPO_ROOT}"
+  export AYiL_HPC_HOST=login.hpc.caltech.edu
+  export AYiL_HPC_USER=testuser
 
   # shellcheck source=../../scripts/lib/hpc_ssh.sh
   source "${REPO_ROOT}/scripts/lib/hpc_ssh.sh"

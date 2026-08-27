@@ -9,13 +9,13 @@
 # First run (or after ~2h): password + Duo once. Reuses ~/.ssh/ayil-hpc socket.
 # Default: --ignore-existing (never overwrites local files). Git metadata excluded.
 #
-# Optional: scripts/env.local — AYIL_HPC_HOST, AYIL_HPC_USER, AYIL_HPC_ROOT, AYIL_RSYNC_EXTRA
+# Optional: scripts/env.local — AYiL_HPC_HOST, AYiL_HPC_USER, AYiL_HPC_ROOT, AYiL_RSYNC_EXTRA
 # Advanced: ./scripts/hpc_ssh_master.sh {start|status|stop}
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # No mpirun probe before SSH login (would run from config.sh otherwise).
-export AYIL_SKIP_MPI_AUTO=1
+export AYiL_SKIP_MPI_AUTO=1
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
 # shellcheck source=lib/hpc_ssh.sh
@@ -49,7 +49,7 @@ EOF
 DRY_RUN=0
 PRINT_CMD=0
 declare -a DATES=()
-export AYIL_SYNC_IGNORE_EXISTING=1
+export AYiL_SYNC_IGNORE_EXISTING=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --replace)
-      export AYIL_SYNC_IGNORE_EXISTING=0
+      export AYiL_SYNC_IGNORE_EXISTING=0
       shift
       ;;
     --print-cmd)
@@ -94,24 +94,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-export AYIL_SYNC_DRY_RUN="${DRY_RUN}"
-export AYIL_HPC_ROOT="${AYIL_HPC_ROOT:-${MOSAiC_AYIL_ROOT}}"
+export AYiL_SYNC_DRY_RUN="${DRY_RUN}"
+export AYiL_HPC_ROOT="${AYiL_HPC_ROOT:-${MOSAiC_AYiL_ROOT}}"
 
 if [[ ${#DATES[@]} -gt 0 ]]; then
-  export AYIL_SYNC_DATES="${DATES[*]}"
+  export AYiL_SYNC_DATES="${DATES[*]}"
 else
-  unset AYIL_SYNC_DATES
+  unset AYiL_SYNC_DATES
 fi
 
-mkdir -p "${AYIL_RUNS}"
+mkdir -p "${AYiL_RUNS}"
 
-host="${AYIL_HPC_HOST:-login.hpc.caltech.edu}"
-user="${AYIL_HPC_USER:-${USER}}"
-remote_root="${AYIL_HPC_ROOT}"
+host="${AYiL_HPC_HOST:-login.hpc.caltech.edu}"
+user="${AYiL_HPC_USER:-${USER}}"
+remote_root="${AYiL_HPC_ROOT}"
 
-if [[ "${PRINT_CMD}" == "1" && -z "${AYIL_RSYNC_SSH:-}" ]]; then
-  export AYIL_RSYNC_SSH
-  AYIL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
+if [[ "${PRINT_CMD}" == "1" && -z "${AYiL_RSYNC_SSH:-}" ]]; then
+  export AYiL_RSYNC_SSH
+  AYiL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
 fi
 
 if [[ "${PRINT_CMD}" != "1" ]]; then
@@ -121,21 +121,21 @@ fi
 ayil_sync_runs_build_rsync_cmd
 
 echo "HPC:  ${user}@${host}:${remote_root}/runs/"
-echo "Local: ${AYIL_RUNS}/"
-if [[ "${AYIL_SYNC_IGNORE_EXISTING:-1}" == "1" ]]; then
+echo "Local: ${AYiL_RUNS}/"
+if [[ "${AYiL_SYNC_IGNORE_EXISTING:-1}" == "1" ]]; then
   echo "Policy: --ignore-existing (will not overwrite existing local files)"
 else
   echo "Policy: rsync may update existing local files (--replace)"
 fi
-if [[ -n "${AYIL_SYNC_DATES:-}" ]]; then
-  echo "Dates: ${AYIL_SYNC_DATES}"
+if [[ -n "${AYiL_SYNC_DATES:-}" ]]; then
+  echo "Dates: ${AYiL_SYNC_DATES}"
 fi
 echo
 
 if [[ "${PRINT_CMD}" == "1" ]]; then
-  printf '  %q' "${AYIL_SYNC_RSYNC_CMD[@]}"
+  printf '  %q' "${AYiL_SYNC_RSYNC_CMD[@]}"
   printf '\n'
   exit 0
 fi
 
-exec "${AYIL_SYNC_RSYNC_CMD[@]}"
+exec "${AYiL_SYNC_RSYNC_CMD[@]}"

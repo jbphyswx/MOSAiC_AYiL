@@ -29,7 +29,7 @@ grep -q 'runtime = 10800' "${TMP}/namoptions" || {
   exit 1
 }
 
-export AYIL_USE_RESTART_CHUNKS=0
+export AYiL_USE_RESTART_CHUNKS=0
 ayil_apply_prepare_namoptions "${TMP}/namoptions"
 grep -q 'trestart = -1' "${TMP}/namoptions" || {
   echo "FAIL: prepare disables restarts" >&2

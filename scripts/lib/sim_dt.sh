@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# Per-AYIL-date DALES timestep vs simulation time (binned tables for Slurm wall scaling).
+# Per-AYiL-date DALES timestep vs simulation time (binned tables for Slurm wall scaling).
 #
-# Canonical store (versioned in git): ${MOSAiC_AYIL_ROOT}/sim_dt/YYYYMMDD.csv
+# Canonical store (versioned in git): ${MOSAiC_AYiL_ROOT}/sim_dt/YYYYMMDD.csv
 # See sim_dt/README.md for bootstrap → corpus_complete → retire generation.
 #
 # Wall parallel term: time-mean of dt_ref/dt over bins in the chunk.
@@ -10,21 +10,21 @@
 # Pessimistic f_dt only when sim_dt/DATE.csv is missing or sparse for that chunk window.
 # R_ref in slurm_defaults assumes dt ≈ dt_ref; f_dt adjusts per date and sim-time window.
 
-export AYIL_SIM_DT_BIN_SEC="${AYIL_SIM_DT_BIN_SEC:-60}"
-export AYIL_SIM_DT_REF_SEC="${AYIL_SIM_DT_REF_SEC:-2.0}"
+export AYiL_SIM_DT_BIN_SEC="${AYiL_SIM_DT_BIN_SEC:-60}"
+export AYiL_SIM_DT_REF_SEC="${AYiL_SIM_DT_REF_SEC:-2.0}"
 # Pessimistic cap when sim_dt/DATE.csv is missing or does not cover the chunk window.
-export AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC:-0.6}"
-export AYIL_SIM_DT_MIN_COVERAGE_FRAC="${AYIL_SIM_DT_MIN_COVERAGE_FRAC:-0.8}"
+export AYiL_SIM_DT_PESSIMISTIC_MIN_DT_SEC="${AYiL_SIM_DT_PESSIMISTIC_MIN_DT_SEC:-0.6}"
+export AYiL_SIM_DT_MIN_COVERAGE_FRAC="${AYiL_SIM_DT_MIN_COVERAGE_FRAC:-0.8}"
 # Walltime: off by default — R_ref must be calibrated with estimate_wall_ref.sh first;
-# enabling f_dt without matching AYIL_SIM_DT_REF_SEC to that run double-counts (see slurm_defaults.sh).
-export AYIL_SIM_DT_USE="${AYIL_SIM_DT_USE:-0}"
+# enabling f_dt without matching AYiL_SIM_DT_REF_SEC to that run double-counts (see slurm_defaults.sh).
+export AYiL_SIM_DT_USE="${AYiL_SIM_DT_USE:-0}"
 # 1 while bootstrap may write sim_dt/*.csv; set 0 after sim_dt/.corpus_complete
-export AYIL_SIM_DT_RECORD="${AYIL_SIM_DT_RECORD:-1}"
+export AYiL_SIM_DT_RECORD="${AYiL_SIM_DT_RECORD:-1}"
 # 0 = keep existing bins unless log adds lines for that bin; 1 = recompute every bin the log covers
-export AYIL_SIM_DT_RECOMPUTE="${AYIL_SIM_DT_RECOMPUTE:-0}"
+export AYiL_SIM_DT_RECOMPUTE="${AYiL_SIM_DT_RECOMPUTE:-0}"
 
 ayil_sim_dt_root() {
-  echo "${AYIL_SIM_DT_DIR:-${MOSAiC_AYIL_ROOT}/sim_dt}"
+  echo "${AYiL_SIM_DT_DIR:-${MOSAiC_AYiL_ROOT}/sim_dt}"
 }
 
 ayil_sim_dt_csv() {
@@ -38,7 +38,7 @@ ayil_sim_dt_corpus_complete() {
 
 # True when runtime may merge dales.log into sim_dt/ (bootstrap only).
 ayil_sim_dt_may_record() {
-  if [[ "${AYIL_SIM_DT_RECORD}" != "1" ]]; then
+  if [[ "${AYiL_SIM_DT_RECORD}" != "1" ]]; then
     return 1
   fi
   if ayil_sim_dt_corpus_complete; then
@@ -73,8 +73,8 @@ ayil_sim_dt_log_stats() {
 # Stats from sim_dt CSV. Prints: v3 bins=N sim_table=LO-HIs dt_eff=... partial|full_day
 ayil_sim_dt_csv_stats() {
   local csv="$1"
-  local bin_sec="${AYIL_SIM_DT_BIN_SEC}"
-  local day_sec="${AYIL_DAY_RUNTIME_SEC:-10800}"
+  local bin_sec="${AYiL_SIM_DT_BIN_SEC}"
+  local day_sec="${AYiL_DAY_RUNTIME_SEC:-10800}"
   [[ -f "${csv}" ]] || return 1
   awk -v bin="${bin_sec}" -v day="${day_sec}" '
     BEGIN { FS = "," }
@@ -185,9 +185,9 @@ ayil_sim_dt_merge_log() {
   local date="$1"
   local log="$2"
   local nproc="${3:-}"
-  local bin_sec="${AYIL_SIM_DT_BIN_SEC}"
+  local bin_sec="${AYiL_SIM_DT_BIN_SEC}"
   local root csv
-  if ! ayil_sim_dt_may_record && [[ "${AYIL_SIM_DT_FORCE_RECORD:-0}" != "1" ]]; then
+  if ! ayil_sim_dt_may_record && [[ "${AYiL_SIM_DT_FORCE_RECORD:-0}" != "1" ]]; then
     return 0
   fi
   root="$(ayil_sim_dt_root)"
@@ -196,8 +196,8 @@ ayil_sim_dt_merge_log() {
   [[ -f "${log}" ]] || return 0
 
   awk -v bin="${bin_sec}" -v date="${date}" -v nproc="${nproc}" \
-    -v ref="${AYIL_SIM_DT_REF_SEC}" \
-    -v recompute_all="${AYIL_SIM_DT_RECOMPUTE:-0}" \
+    -v ref="${AYiL_SIM_DT_REF_SEC}" \
+    -v recompute_all="${AYiL_SIM_DT_RECOMPUTE:-0}" \
     -v utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -v host="$(hostname -s 2>/dev/null || hostname)" \
     -v existing="${csv}" \
@@ -355,8 +355,8 @@ ayil_sim_dt_merge_log() {
 
 # f_dt = time-mean(dt_ref/dt) over bins in chunk. Pessimistic only if table missing or sparse.
 ayil_sim_dt_pessimistic_cost_factor() {
-  local ref="${AYIL_SIM_DT_REF_SEC}"
-  local mindt="${AYIL_SIM_DT_PESSIMISTIC_MIN_DT_SEC}"
+  local ref="${AYiL_SIM_DT_REF_SEC}"
+  local mindt="${AYiL_SIM_DT_PESSIMISTIC_MIN_DT_SEC}"
   awk -v ref="${ref}" -v mindt="${mindt}" \
     'BEGIN { if (ref <= 0 || mindt <= 0) print 1; else printf "%.4f", ref / mindt }'
 }
@@ -365,21 +365,21 @@ ayil_sim_dt_pessimistic_cost_factor() {
 ayil_sim_dt_segment_cost_factor() {
   local date="$1"
   local sim_lo="${2:-0}"
-  local sim_hi="${3:-${AYIL_DAY_RUNTIME_SEC:-10800}}"
+  local sim_hi="${3:-${AYiL_DAY_RUNTIME_SEC:-10800}}"
   local csv ref pess cov_frac
-  if [[ "${AYIL_SIM_DT_USE}" != "1" ]]; then
+  if [[ "${AYiL_SIM_DT_USE}" != "1" ]]; then
     echo 1
     return 0
   fi
   pess="$(ayil_sim_dt_pessimistic_cost_factor)"
   csv="$(ayil_sim_dt_csv "${date}")"
-  ref="${AYIL_SIM_DT_REF_SEC}"
-  cov_frac="${AYIL_SIM_DT_MIN_COVERAGE_FRAC}"
+  ref="${AYiL_SIM_DT_REF_SEC}"
+  cov_frac="${AYiL_SIM_DT_MIN_COVERAGE_FRAC}"
   [[ -f "${csv}" ]] || {
     echo "${pess}"
     return 0
   }
-  awk -v lo="${sim_lo}" -v hi="${sim_hi}" -v ref="${ref}" -v bin="${AYIL_SIM_DT_BIN_SEC}" \
+  awk -v lo="${sim_lo}" -v hi="${sim_hi}" -v ref="${ref}" -v bin="${AYiL_SIM_DT_BIN_SEC}" \
     -v pess="${pess}" -v cov="${cov_frac}" \
     'BEGIN {
       if (hi <= lo || ref <= 0) { print pess; exit }

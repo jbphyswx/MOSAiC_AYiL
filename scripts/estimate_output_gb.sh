@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rough order-of-magnitude output size for one full AYIL day (runtime=7200 s).
+# Rough order-of-magnitude output size for one full AYiL day (runtime=7200 s).
 #
 # Usage: estimate_output_gb.sh [NPROC]
 #
@@ -14,7 +14,7 @@ source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/lib/run_status.sh"
 
 NPROC="${1:-${DALES_NPROC:-64}}"
-REF_NAM="${AYIL_INPUTS}/20200720/namoptions"
+REF_NAM="${AYiL_INPUTS}/20200720/namoptions"
 RUNTIME="$(ayil_read_runtime "${REF_NAM}")"
 FIELD_DTAV="$(awk '/^&namfielddump/,/^\/$/ { if ($1 ~ /^dtav/) { gsub(/[^0-9]/,"",$3); print $3; exit } }' "${REF_NAM}")"
 KHIGH="$(awk '/^&namfielddump/,/^\/$/ { if ($1 ~ /^khigh/) { gsub(/[^0-9]/,"",$3); print $3; exit } }' "${REF_NAM}")"
@@ -48,7 +48,7 @@ echo "All outputs (profiles, cross-sections, stats, logs): typically 1.5-3x fiel
 echo "  => expect roughly $(awk -v f="${FIELD_GB}" 'BEGIN { printf "%.0f-%.0f", f*1.5, f*3 }') GB per completed day"
 echo ""
 
-SMOKE_DIR="${AYIL_RUNS}/smoke_20200720"
+SMOKE_DIR="${AYiL_RUNS}/smoke_20200720"
 if [[ -d "${SMOKE_DIR}" ]]; then
   smoke_bytes=$(ayil_dir_size_bytes "${SMOKE_DIR}")
   # shellcheck source=lib/logging_paths.sh
@@ -65,4 +65,4 @@ if [[ -d "${SMOKE_DIR}" ]]; then
 fi
 
 echo ""
-echo "Inputs per day (scm_in + ancillary): ~$(du -sh "${AYIL_INPUTS}/20200720" 2>/dev/null | awk '{print $1}' || echo '?')"
+echo "Inputs per day (scm_in + ancillary): ~$(du -sh "${AYiL_INPUTS}/20200720" 2>/dev/null | awk '{print $1}' || echo '?')"

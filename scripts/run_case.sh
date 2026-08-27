@@ -19,7 +19,7 @@ fi
 
 DATE="$1"
 NPROC="${2:-${DALES_NPROC}}"
-RUN_DIR="${3:-${AYIL_RUNS}/${DATE}}"
+RUN_DIR="${3:-${AYiL_RUNS}/${DATE}}"
 
 if [[ ! -x "${DALES_BIN}" ]]; then
   echo "ERROR: ${DALES_BIN} not found. Run scripts/build_dales.sh first." >&2

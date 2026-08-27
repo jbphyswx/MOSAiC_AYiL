@@ -19,8 +19,8 @@ ayil_refuse_login_mpi_tests "manual/smoke_test.sh" || exit 1
 DATE="${1:-20200720}"
 NPROC="${2:-4}"
 TIMEOUT_SEC="${3:-120}"
-SMOKE_RUNTIME_SEC="${AYIL_SMOKE_RUNTIME_SEC:-30}"
-RUN_DIR="${AYIL_RUNS}/smoke_${DATE}"
+SMOKE_RUNTIME_SEC="${AYiL_SMOKE_RUNTIME_SEC:-30}"
+RUN_DIR="${AYiL_RUNS}/smoke_${DATE}"
 
 if [[ ! -x "${DALES_BIN}" ]]; then
   echo "ERROR: ${DALES_BIN} not found. Run: ${ROOT}/build_dales.sh" >&2

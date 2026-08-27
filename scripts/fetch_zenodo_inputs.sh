@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prefetch Zenodo ayil_config_input_results.zip into AYIL_INPUTS (optional).
+# Prefetch Zenodo ayil_config_input_results.zip into AYiL_INPUTS (optional).
 #
 # Normal workflow: prepare_case / run_local / run_slurm fetch automatically.
 # Use this to download on a login node before batch jobs.
@@ -14,4 +14,4 @@ source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/lib/zenodo_inputs.sh"
 
 ayil_ensure_zenodo_bundle
-echo "Inputs ready: ${AYIL_INPUTS}"
+echo "Inputs ready: ${AYiL_INPUTS}"

@@ -1,8 +1,8 @@
 # Fielddump and Slurm chunking
 
-MOSAiC_AYIL’s main product is **3D `fielddump`** (`namfielddump` `dtav = 1800` s → **6** snapshots per **10800** s day). Slurm runs many short **warm-started** segments per day. That combination needs clear rules.
+MOSAiC_AYiL’s main product is **3D `fielddump`** (`namfielddump` `dtav = 1800` s → **6** snapshots per **10800** s day). Slurm runs many short **warm-started** segments per day. That combination needs clear rules.
 
-**Fork changes in DALES:** [dales_ayil/MOSAiC_AYIL_FORK.md](../dales_ayil/MOSAiC_AYIL_FORK.md) — read before editing Fortran or blaming “sync/Zarr”.
+**Fork changes in DALES:** [MOSAiC_AYiL/MOSAiC_AYiL_FORK.md](../MOSAiC_AYiL/MOSAiC_AYiL_FORK.md) — read before editing Fortran or blaming “sync/Zarr”.
 
 ---
 
@@ -17,15 +17,15 @@ MOSAiC_AYIL’s main product is **3D `fielddump`** (`namfielddump` `dtav = 1800`
 
 ## Rule
 
-**Each Slurm chunk must reach the next fielddump time before the job exits**, or use the **`modfielddump` `tnext` patch** in this repo’s `dales_ayil` (rebuild `dales4`).
+**Each Slurm chunk must reach the next fielddump time before the job exits**, or use the **`modfielddump` `tnext` patch** in this repo’s `MOSAiC_AYiL` (rebuild `dales4`).
 
-| Approach | `AYIL_CHUNK_SIM_SEC` | Rebuild `dales4`? |
+| Approach | `AYiL_CHUNK_SIM_SEC` | Rebuild `dales4`? |
 |----------|----------------------|-------------------|
 | **Default (recommended)** | **1800** (6 chunks/day) | Patch still recommended; 1800 s aligns with stock DALES scheduling |
-| Short chunks (e.g. 300) | &lt; `dtav` | **Required** — use patched `dales_ayil` |
+| Short chunks (e.g. 300) | &lt; `dtav` | **Required** — use patched `MOSAiC_AYiL` |
 | One job per day | N/A (`--no-chunked`) | Optional |
 
-Do **not** set `AYIL_CHUNK_SIM_SEC=300` (or 600) with `dtav=1800` on **unpatched** upstream DALES.
+Do **not** set `AYiL_CHUNK_SIM_SEC=300` (or 600) with `dtav=1800` on **unpatched** upstream DALES.
 
 ---
 

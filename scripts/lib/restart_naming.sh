@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Mirror DALES initd restart naming (dales_ayil/src/modstartup.f90).
+# Mirror DALES initd restart naming (MOSAiC_AYiL/src/modstartup.f90).
 # Used by tests and chunk_run docs; keep in sync with do_writerestartfiles / readrestartfiles.
 
 # 1-based Fortran-style splice: replace positions [start, start+len-1] with repl.

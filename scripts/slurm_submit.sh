@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Submit Slurm job(s) for MOSAiC AYIL DALES runs. Skips complete days unless --force.
+# Submit Slurm job(s) for MOSAiC AYiL DALES runs. Skips complete days unless --force.
 #
 # Default: chunked mode — short sim segments (default 600 s) with sbatch --time scaled
-# from AYIL_CHUNK_SIM_SEC. Use --no-chunked for one job/day (wall scales to full runtime).
+# from AYiL_CHUNK_SIM_SEC. Use --no-chunked for one job/day (wall scales to full runtime).
 #
 # Usage:
 #   slurm_submit.sh --pending                 # chunked chains for all eligible days
@@ -20,7 +20,7 @@
 #   --status      Show submit/skip breakdown only
 #
 # Prereqs: build dales4 on the login node (./scripts/build_dales.sh) unless
-#   AYIL_SLURM_BUILD=1 in env.local.
+#   AYiL_SLURM_BUILD=1 in env.local.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -82,8 +82,8 @@ fi
 TO_SUBMIT=()
 SKIPPED=()
 
-for date in "${AYIL_PENDING_DATES[@]}"; do
-  run_dir="${AYIL_RUNS}/${date}"
+for date in "${AYiL_PENDING_DATES[@]}"; do
+  run_dir="${AYiL_RUNS}/${date}"
   if ayil_should_submit_date "${run_dir}" "${FORCE}"; then
     if [[ "${CHUNKED}" -eq 1 ]]; then
       n_chunks="$(ayil_n_chunks)"
@@ -107,7 +107,7 @@ log_msg() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# Reject dates that are not in ayil_config_input_results (calendar YYYYMMDD ≠ AYIL day).
+# Reject dates that are not in ayil_config_input_results (calendar YYYYMMDD ≠ AYiL day).
 INVALID_INPUTS=()
 VALID_SUBMIT=()
 for date in "${TO_SUBMIT[@]}"; do
@@ -121,8 +121,8 @@ TO_SUBMIT=("${VALID_SUBMIT[@]}")
 
 if [[ "${MODE}" == "status" ]]; then
   printf "%-12s %-10s %-12s %s\n" "DATE" "INPUTS" "STATE" "SUBMIT?"
-  for date in "${AYIL_PENDING_DATES[@]}"; do
-    run_dir="${AYIL_RUNS}/${date}"
+  for date in "${AYiL_PENDING_DATES[@]}"; do
+    run_dir="${AYiL_RUNS}/${date}"
     state="$(ayil_run_state "${run_dir}")"
     inputs="no"
     if ayil_day_inputs_ready "${date}"; then
@@ -140,7 +140,7 @@ if [[ "${MODE}" == "status" ]]; then
 fi
 
 if ((${#INVALID_INPUTS[@]} > 0)); then
-  log_msg "ERROR: ${#INVALID_INPUTS[@]} date(s) are not MOSAiC AYIL input days under ${AYIL_INPUTS}:"
+  log_msg "ERROR: ${#INVALID_INPUTS[@]} date(s) are not MOSAiC AYiL input days under ${AYiL_INPUTS}:"
   for date in "${INVALID_INPUTS[@]}"; do
     log_msg "  NO_INPUTS ${date}  (not in Zenodo bundle — do not use arbitrary calendar dates)"
   done
@@ -154,7 +154,7 @@ fi
 if ((${#SKIPPED[@]} > 0)); then
   log_msg "Skipping ${#SKIPPED[@]} day(s) (complete or running; use --force to include):"
   for date in "${SKIPPED[@]}"; do
-    log_msg "  SKIP ${date}  state=$(ayil_run_state "${AYIL_RUNS}/${date}")"
+    log_msg "  SKIP ${date}  state=$(ayil_run_state "${AYiL_RUNS}/${date}")"
   done
 fi
 
@@ -162,7 +162,7 @@ if ((${#TO_SUBMIT[@]} == 0)); then
   log_msg "Nothing to submit — all requested days are skipped (complete, running in queue, or no incomplete chunks)."
   if ((${#SKIPPED[@]} > 0)); then
     for date in "${SKIPPED[@]}"; do
-      run_dir="${AYIL_RUNS}/${date}"
+      run_dir="${AYiL_RUNS}/${date}"
       ayil_recover_stale_run_state "${run_dir}"
       extra=""
       if [[ "${CHUNKED}" -eq 1 ]]; then
@@ -182,26 +182,26 @@ for date in "${TO_SUBMIT[@]}"; do
 done
 
 if [[ "${CHUNKED}" -eq 1 ]]; then
-  export AYIL_SLURM_WALL_SIM_SEC="${AYIL_CHUNK_SIM_SEC}"
-  log_msg "Chunked submit: AYIL_CHUNK_SIM_SEC=${AYIL_CHUNK_SIM_SEC} n_chunks=$(ayil_n_chunks) AYIL_SLURM_NTASKS=${AYIL_SLURM_NTASKS} mem=${AYIL_SLURM_MEM}"
+  export AYiL_SLURM_WALL_SIM_SEC="${AYiL_CHUNK_SIM_SEC}"
+  log_msg "Chunked submit: AYiL_CHUNK_SIM_SEC=${AYiL_CHUNK_SIM_SEC} n_chunks=$(ayil_n_chunks) AYiL_SLURM_NTASKS=${AYiL_SLURM_NTASKS} mem=${AYiL_SLURM_MEM}"
 else
-  export AYIL_SLURM_WALL_SIM_SEC="${AYIL_DAY_RUNTIME_SEC}"
+  export AYiL_SLURM_WALL_SIM_SEC="${AYiL_DAY_RUNTIME_SEC}"
 fi
 
-# Per-date/chunk wall uses AYIL_WALL_DATE + sim range (see ayil_slurm_walltime_for_submit).
+# Per-date/chunk wall uses AYiL_WALL_DATE + sim range (see ayil_slurm_walltime_for_submit).
 ayil_slurm_walltime_for_submit() {
   local date="${1:-}"
   local chunk="${2:-0}"
   if [[ "${CHUNKED}" -eq 1 ]]; then
-    export AYIL_WALL_DATE="${date}"
-    export AYIL_WALL_SIM_LO=$(( chunk * AYIL_CHUNK_SIM_SEC ))
-    export AYIL_WALL_SIM_HI=$(( (chunk + 1) * AYIL_CHUNK_SIM_SEC ))
+    export AYiL_WALL_DATE="${date}"
+    export AYiL_WALL_SIM_LO=$(( chunk * AYiL_CHUNK_SIM_SEC ))
+    export AYiL_WALL_SIM_HI=$(( (chunk + 1) * AYiL_CHUNK_SIM_SEC ))
   elif [[ -n "${date}" ]]; then
-    export AYIL_WALL_DATE="${date}"
-    export AYIL_WALL_SIM_LO=0
-    export AYIL_WALL_SIM_HI="${AYIL_DAY_RUNTIME_SEC}"
+    export AYiL_WALL_DATE="${date}"
+    export AYiL_WALL_SIM_LO=0
+    export AYiL_WALL_SIM_HI="${AYiL_DAY_RUNTIME_SEC}"
   else
-    unset AYIL_WALL_DATE AYIL_WALL_SIM_LO AYIL_WALL_SIM_HI
+    unset AYiL_WALL_DATE AYiL_WALL_SIM_LO AYiL_WALL_SIM_HI
   fi
   ayil_slurm_compute_walltime
 }
@@ -212,29 +212,29 @@ ayil_slurm_log_wall_hint() {
   local wall_time="$3"
   local factor eff
   if [[ "${CHUNKED}" -eq 1 ]]; then
-    factor="$(ayil_sim_dt_segment_cost_factor "${date}" "$(( chunk * AYIL_CHUNK_SIM_SEC ))" "$(( (chunk + 1) * AYIL_CHUNK_SIM_SEC ))")"
+    factor="$(ayil_sim_dt_segment_cost_factor "${date}" "$(( chunk * AYiL_CHUNK_SIM_SEC ))" "$(( (chunk + 1) * AYiL_CHUNK_SIM_SEC ))")"
   else
-    factor="$(ayil_sim_dt_segment_cost_factor "${date}" 0 "${AYIL_DAY_RUNTIME_SEC}")"
+    factor="$(ayil_sim_dt_segment_cost_factor "${date}" 0 "${AYiL_DAY_RUNTIME_SEC}")"
   fi
   eff="$(ayil_slurm_effective_wall_per_sim_sec)"
-  log_msg "  --time=${wall_time} sim_seg=${AYIL_SLURM_WALL_SIM_SEC}s eff_wall/sim=${eff} dt_cost×${factor} (sim_dt=$(ayil_sim_dt_csv "${date}" 2>/dev/null || echo missing))"
+  log_msg "  --time=${wall_time} sim_seg=${AYiL_SLURM_WALL_SIM_SEC}s eff_wall/sim=${eff} dt_cost×${factor} (sim_dt=$(ayil_sim_dt_csv "${date}" 2>/dev/null || echo missing))"
 }
 SLURM_SCRIPT="${SCRIPT_DIR}/slurm/run_day.slurm"
-EXPORT_BASE="ALL,AYIL_FORCE=${FORCE},MOSAiC_AYIL_ROOT=${MOSAiC_AYIL_ROOT}"
+EXPORT_BASE="ALL,AYiL_FORCE=${FORCE},MOSAiC_AYiL_ROOT=${MOSAiC_AYiL_ROOT}"
 
 if [[ "${CHUNKED}" -eq 1 ]]; then
   N_CHUNKS="$(ayil_n_chunks)"
-  EXPORT_BASE="${EXPORT_BASE},AYIL_USE_RESTART_CHUNKS=1,AYIL_N_CHUNKS=${N_CHUNKS}"
-  EXPORT_BASE="${EXPORT_BASE},AYIL_DAY_RUNTIME_SEC=${AYIL_DAY_RUNTIME_SEC},AYIL_CHUNK_SIM_SEC=${AYIL_CHUNK_SIM_SEC}"
+  EXPORT_BASE="${EXPORT_BASE},AYiL_USE_RESTART_CHUNKS=1,AYiL_N_CHUNKS=${N_CHUNKS}"
+  EXPORT_BASE="${EXPORT_BASE},AYiL_DAY_RUNTIME_SEC=${AYiL_DAY_RUNTIME_SEC},AYiL_CHUNK_SIM_SEC=${AYiL_CHUNK_SIM_SEC}"
 else
-  EXPORT_BASE="${EXPORT_BASE},AYIL_USE_RESTART_CHUNKS=0"
+  EXPORT_BASE="${EXPORT_BASE},AYiL_USE_RESTART_CHUNKS=0"
 fi
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-  log_msg "DRY-RUN (no sbatch): ntasks=${AYIL_SLURM_NTASKS} mem=${AYIL_SLURM_MEM} R_ref=${AYIL_SLURM_WALL_REF_PER_SIM_SEC}@${AYIL_SLURM_WALL_REF_NTASKS}"
+  log_msg "DRY-RUN (no sbatch): ntasks=${AYiL_SLURM_NTASKS} mem=${AYiL_SLURM_MEM} R_ref=${AYiL_SLURM_WALL_REF_PER_SIM_SEC}@${AYiL_SLURM_WALL_REF_NTASKS}"
   for date in "${TO_SUBMIT[@]}"; do
     if [[ "${CHUNKED}" -eq 1 ]]; then
-      first="$(ayil_first_incomplete_chunk "${AYIL_RUNS}/${date}" "${N_CHUNKS}")"
+      first="$(ayil_first_incomplete_chunk "${AYiL_RUNS}/${date}" "${N_CHUNKS}")"
       (( first < 0 )) && first=0
       dep=""
       for ((c = first; c < N_CHUNKS; c++)); do
@@ -243,7 +243,7 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
         wall_time="$(ayil_slurm_walltime_for_submit "${date}" "${c}")"
         ayil_slurm_log_wall_hint "${date}" "${c}" "${wall_time}"
         ayil_slurm_sbatch_opts SBATCH_OPTS "${wall_time}"
-        log_msg "  sbatch${dep_flag} ${SBATCH_OPTS[*]} --job-name=ayil_${date}_c${c} --export=${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c} ${SLURM_SCRIPT}"
+        log_msg "  sbatch${dep_flag} ${SBATCH_OPTS[*]} --job-name=ayil_${date}_c${c} --export=${EXPORT_BASE},DATE=${date},AYiL_CHUNK_INDEX=${c} ${SLURM_SCRIPT}"
         dep="<job_${c}>"
       done
     else
@@ -261,16 +261,16 @@ if ! command -v sbatch &>/dev/null; then
   exit 1
 fi
 
-if [[ ! -x "${DALES_BIN}" && "${AYIL_SLURM_BUILD:-0}" != "1" ]]; then
+if [[ ! -x "${DALES_BIN}" && "${AYiL_SLURM_BUILD:-0}" != "1" ]]; then
   echo "ERROR: ${DALES_BIN} missing. Build on the login node:" >&2
   echo "  ./scripts/build_dales.sh" >&2
-  echo "Or set AYIL_SLURM_BUILD=1 in scripts/env.local to compile in each job." >&2
+  echo "Or set AYiL_SLURM_BUILD=1 in scripts/env.local to compile in each job." >&2
   exit 1
 fi
 
 submit_chunk_chain() {
   local date="$1"
-  local run_dir="${AYIL_RUNS}/${date}"
+  local run_dir="${AYiL_RUNS}/${date}"
   local first n_chunks c wall_time
   n_chunks="$(ayil_n_chunks)"
   first="$(ayil_first_incomplete_chunk "${run_dir}" "${n_chunks}")"
@@ -288,7 +288,7 @@ submit_chunk_chain() {
     jid="$(
       sbatch "${chunk_opts[@]}" "${dep_args[@]}" \
         --job-name="ayil_${date}_c${c}" \
-        --export="${EXPORT_BASE},DATE=${date},AYIL_CHUNK_INDEX=${c}" \
+        --export="${EXPORT_BASE},DATE=${date},AYiL_CHUNK_INDEX=${c}" \
         "${SLURM_SCRIPT}" | awk '{print $NF}'
     )"
     log_msg "  ${jid}  DATE=${date}  chunk=${c}/${n_chunks}  --time=${wall_time}"
@@ -321,7 +321,7 @@ else
     log_msg "${jid}  DATE=${date}"
     total_jobs=$(( total_jobs + 1 ))
   done
-  log_msg "Submitted ${total_jobs} job(s) (one per day; ensure walltime covers ${AYIL_DAY_RUNTIME_SEC}s sim)."
+  log_msg "Submitted ${total_jobs} job(s) (one per day; ensure walltime covers ${AYiL_DAY_RUNTIME_SEC}s sim)."
 fi
 
-log_msg "Per-run logs: ${AYIL_RUNS}/<DATE>/logs/{slurm.out,progress.log,dales.log}"
+log_msg "Per-run logs: ${AYiL_RUNS}/<DATE>/logs/{slurm.out,progress.log,dales.log}"

@@ -1,4 +1,4 @@
-# MOSAiC AYIL pipeline scripts
+# MOSAiC AYiL pipeline scripts
 
 All build and run steps live here as version-controlled shell scripts. **Do not rely on ad-hoc terminal commands**—use these entry points so results are reproducible.
 
@@ -19,7 +19,7 @@ cp scripts/env.example scripts/env.local
 |------|--------|----------------|
 | 1 | `check_prerequisites.sh` | Checks `cmake`, `mpif90`, `mpirun`, `rsync`, NetCDF, repo layout |
 | 2 | `bootstrap_build_tree.sh` | Ensures `CMakeLists.txt`, `findnetcdf`, `cases/standard/moduser.f90` exist |
-| 3 | `build_dales.sh` | `cmake` + `make` → `dales_ayil/build/src/dales4` |
+| 3 | `build_dales.sh` | `cmake` + `make` → `MOSAiC_AYiL/build/src/dales4` |
 | 4 | `./test/run_tests.sh` | Lightweight mock LES orchestration (default in `reproduce.sh`) |
 
 ## Script reference
@@ -46,7 +46,7 @@ cp scripts/env.example scripts/env.local
 | **`slurm_submit.sh`** | **Submit Slurm array or per-day jobs; skips complete days** |
 | `run_slurm_day.sh YYYYMMDD` | One day inside a batch job (status markers) |
 | `manual/smoke_test.sh` | **Manual** real-MPI sanity (compute node only) |
-| `clean.sh build\|runs\|all` | Remove `dales_ayil/build` and/or `runs/` |
+| `clean.sh build\|runs\|all` | Remove `MOSAiC_AYiL/build` and/or `runs/` |
 | `reproduce.sh` | Canonical chain: check → bootstrap → build → smoke |
 | `slurm/run_day.slurm` | Slurm job body (single day or array task) |
 
@@ -87,13 +87,13 @@ Automated checks: `test_restart_naming.sh`, `test_chunk_restart_handoff.sh`, `te
 
 ## Slurm (HPC batch)
 
-Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **`--mem = ntasks×4 GiB + 16`**, **`--time` auto** from `T_fixed + T_sim×(R_ref×N_ref/N_mpi)` (defaults `R_ref=14` @ `N_ref=64`, `AYIL_SIM_DT_USE=0`, +15% headroom, max 8 h). Override in `scripts/env.local`; see `env.example` for `AYIL_SLURM_WALL_*`.
+Defaults in `lib/slurm_defaults.sh`: single node, **64** MPI tasks, **`--mem = ntasks×4 GiB + 16`**, **`--time` auto** from `T_fixed + T_sim×(R_ref×N_ref/N_mpi)` (defaults `R_ref=14` @ `N_ref=64`, `AYiL_SIM_DT_USE=0`, +15% headroom, max 8 h). Override in `scripts/env.local`; see `env.example` for `AYiL_SLURM_WALL_*`.
 
-**Default submit mode is chunked:** chained jobs (`--dependency=afterok`); segment length `AYIL_CHUNK_SIM_SEC` (default **1800 s** → 6 chunks/day for 10800 s; must match `namfielddump` `dtav`). Many days submit in parallel (one chain per day). Dry-run logs `n_chunks`, `ntasks`, and **per-chunk** `--time` (1/n MPI model × optional **dt profile**). Use `--no-chunked` for one job/day only if walltime covers the full day.
+**Default submit mode is chunked:** chained jobs (`--dependency=afterok`); segment length `AYiL_CHUNK_SIM_SEC` (default **1800 s** → 6 chunks/day for 10800 s; must match `namfielddump` `dtav`). Many days submit in parallel (one chain per day). Dry-run logs `n_chunks`, `ntasks`, and **per-chunk** `--time` (1/n MPI model × optional **dt profile**). Use `--no-chunked` for one job/day only if walltime covers the full day.
 
-**Fielddump + chunks (do not skip):** [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md). **Fortran fork:** [dales_ayil/MOSAiC_AYIL_FORK.md](../dales_ayil/MOSAiC_AYIL_FORK.md). Rebuild `./scripts/build_dales.sh` after `dales_ayil` changes. Shorter chunks (300/600 s) without the fork patch yield **empty `fielddump` (`time=0`)** while `profiles` and `initdlatest` still grow.
+**Fielddump + chunks (do not skip):** [docs/fielddump_and_chunking.md](../docs/fielddump_and_chunking.md). **Fortran fork:** [MOSAiC_AYiL/MOSAiC_AYiL_FORK.md](../MOSAiC_AYiL/MOSAiC_AYiL_FORK.md). Rebuild `./scripts/build_dales.sh` after `MOSAiC_AYiL` changes. Shorter chunks (300/600 s) without the fork patch yield **empty `fielddump` (`time=0`)** while `profiles` and `initdlatest` still grow.
 
-**Timestep vs sim time:** `sim_dt/YYYYMMDD.csv` in the repo tree (see [`sim_dt/README.md`](../sim_dt/README.md)). Bootstrap: chunks update CSVs on disk (`AYIL_SIM_DT_RECORD=1`); backfill `./scripts/dev/ingest_sim_dt.sh`. When complete: `sim_dt/.corpus_complete` + `AYIL_SIM_DT_RECORD=0` — production reads only, no runtime merge.
+**Timestep vs sim time:** `sim_dt/YYYYMMDD.csv` in the repo tree (see [`sim_dt/README.md`](../sim_dt/README.md)). Bootstrap: chunks update CSVs on disk (`AYiL_SIM_DT_RECORD=1`); backfill `./scripts/dev/ingest_sim_dt.sh`. When complete: `sim_dt/.corpus_complete` + `AYiL_SIM_DT_RECORD=0` — production reads only, no runtime merge.
 
 ### First time on the cluster
 
@@ -119,7 +119,7 @@ Behavior:
 | `runs/YYYYMMDD/.ayil_running` | **Not submitted** | Submitted |
 | failed / interrupted / missing | Submitted | Submitted |
 
-The submit script filters **before** `sbatch`. Each chunk job runs `run_slurm_day.sh` with `AYIL_CHUNK_INDEX`; partial days resume from the first incomplete chunk.
+The submit script filters **before** `sbatch`. Each chunk job runs `run_slurm_day.sh` with `AYiL_CHUNK_INDEX`; partial days resume from the first incomplete chunk.
 
 ```bash
 ./scripts/slurm_submit.sh --pending --limit 10           # first 10 eligible days
@@ -138,15 +138,15 @@ tail -f runs/20200720/logs/slurm.out      # job wrapper (modules, START/DONE)
 ./scripts/list_cases.sh
 ```
 
-Slurm copies `run_day.slurm` to `/var/spool/slurmd/...` on compute nodes. The job resolves the repo via **`MOSAiC_AYIL_ROOT`** (set by `slurm_submit.sh`), **`SLURM_SUBMIT_DIR`**, or `cd` to the checkout — not via `BASH_SOURCE` in the spool copy. Always submit from the repo (`./scripts/slurm_submit.sh`) or pass `MOSAiC_AYIL_ROOT` explicitly.
+Slurm copies `run_day.slurm` to `/var/spool/slurmd/...` on compute nodes. The job resolves the repo via **`MOSAiC_AYiL_ROOT`** (set by `slurm_submit.sh`), **`SLURM_SUBMIT_DIR`**, or `cd` to the checkout — not via `BASH_SOURCE` in the spool copy. Always submit from the repo (`./scripts/slurm_submit.sh`) or pass `MOSAiC_AYiL_ROOT` explicitly.
 
 ### Single day (manual `sbatch`)
 
 ```bash
-sbatch --export=ALL,DATE=20200720,MOSAiC_AYIL_ROOT=$PWD scripts/slurm/run_day.slurm
+sbatch --export=ALL,DATE=20200720,MOSAiC_AYiL_ROOT=$PWD scripts/slurm/run_day.slurm
 # Or with explicit resources:
 sbatch --ntasks=40 --time=08:00:00 --mem=128G \
-  --export=ALL,DATE=20200720,MOSAiC_AYIL_ROOT=$PWD \
+  --export=ALL,DATE=20200720,MOSAiC_AYiL_ROOT=$PWD \
   scripts/slurm/run_day.slurm
 ```
 
@@ -154,12 +154,12 @@ sbatch --ntasks=40 --time=08:00:00 --mem=128G \
 
 | Variable | Default | Role |
 |----------|---------|------|
-| `AYIL_SLURM_NTASKS` | `40` | MPI ranks (`#SBATCH --ntasks`) |
-| `AYIL_SLURM_TIME` | `08:00:00` | Walltime |
-| `AYIL_SLURM_MEM` | `200G` (64 ranks) | Total job RAM (`NTASKS×3 + 8` GiB if unset) |
-| `AYIL_SLURM_ARRAY_MAX` | (unset) | Optional max concurrent array tasks (`--array=0-N%M`); unset = no `%` cap |
-| `AYIL_SLURM_PARTITION` | (empty) | Optional partition |
-| `AYIL_SLURM_BUILD` | `0` | Set `1` to compile in each job if binary missing |
+| `AYiL_SLURM_NTASKS` | `40` | MPI ranks (`#SBATCH --ntasks`) |
+| `AYiL_SLURM_TIME` | `08:00:00` | Walltime |
+| `AYiL_SLURM_MEM` | `200G` (64 ranks) | Total job RAM (`NTASKS×3 + 8` GiB if unset) |
+| `AYiL_SLURM_ARRAY_MAX` | (unset) | Optional max concurrent array tasks (`--array=0-N%M`); unset = no `%` cap |
+| `AYiL_SLURM_PARTITION` | (empty) | Optional partition |
+| `AYiL_SLURM_BUILD` | `0` | Set `1` to compile in each job if binary missing |
 
 **Logs** (all under `runs/YYYYMMDD/logs/` — see `lib/logging_paths.sh`):
 
@@ -179,15 +179,15 @@ Outputs per day: `profiles.001.nc`, `fielddump.*.*.001.nc`, `.ayil_complete`, `d
 
 | Variable | Default |
 |----------|---------|
-| `MOSAiC_AYIL_ROOT` | Parent of `scripts/` |
-| `DALES_SRC` | `$MOSAiC_AYIL_ROOT/dales_ayil` |
+| `MOSAiC_AYiL_ROOT` | Parent of `scripts/` |
+| `DALES_SRC` | `$MOSAiC_AYiL_ROOT/MOSAiC_AYiL` |
 | `DALES_BIN` | `$DALES_SRC/build/src/dales4` |
-| `AYIL_INPUTS` | `$MOSAiC_AYIL_ROOT/ayil_config_input_results` |
-| `AYIL_RUNS` | `$MOSAiC_AYIL_ROOT/runs` |
+| `AYiL_INPUTS` | `$MOSAiC_AYiL_ROOT/ayil_config_input_results` |
+| `AYiL_RUNS` | `$MOSAiC_AYiL_ROOT/runs` |
 | `DALES_NPROC` | auto-detected (must divide 320) |
-| `AYIL_SLURM_*` | see Slurm table above |
+| `AYiL_SLURM_*` | see Slurm table above |
 
-## Build tree files (committed under `dales_ayil/`)
+## Build tree files (committed under `MOSAiC_AYiL/`)
 
 Zenodo ships only `src/` and `config/`. This repo also commits:
 

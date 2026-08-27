@@ -52,7 +52,7 @@ fi
 
 echo ""
 echo "=== Repository layout ==="
-for path in "${DALES_SRC}/src/program.f90" "${AYIL_INPUTS}"; do
+for path in "${DALES_SRC}/src/program.f90" "${AYiL_INPUTS}"; do
   if [[ -e "${path}" ]]; then
     echo "OK  ${path}"
   else
@@ -61,8 +61,8 @@ for path in "${DALES_SRC}/src/program.f90" "${AYIL_INPUTS}"; do
   fi
 done
 
-if [[ -d "${AYIL_INPUTS}/20200720" ]]; then
-  echo "OK  sample case ${AYIL_INPUTS}/20200720"
+if [[ -d "${AYiL_INPUTS}/20200720" ]]; then
+  echo "OK  sample case ${AYiL_INPUTS}/20200720"
 else
   echo "WARN sample case 20200720 not found (runs auto-fetch via prepare_case, or ./scripts/fetch_zenodo_inputs.sh)" >&2
 fi

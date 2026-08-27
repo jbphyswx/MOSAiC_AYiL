@@ -1,8 +1,8 @@
-# MOSAiC_AYIL Agent Guide
+# MOSAiC_AYiL Agent Guide
 
 Repo for regenerating **full 3D DALES fielddump** output from the MOSAiC “A Year in LES” Zenodo bundle ([JAMES 10.1029/2024MS004296](https://doi.org/10.1029/2024MS004296), [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362)). Zenodo ships domain-averaged profiles; volumetric `fielddump.*.*.001.nc` tiles must be reproduced by running DALES.
 
-**DALES is a fork:** all Fortran deltas from upstream are in [dales_ayil/MOSAiC_AYIL_FORK.md](dales_ayil/MOSAiC_AYIL_FORK.md). Slurm/fielddump rules: [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md). Rebuild `dales4` after changing `dales_ayil/src/`.
+**DALES is a fork:** all Fortran deltas from upstream are in [MOSAiC_AYiL/MOSAiC_AYiL_FORK.md](MOSAiC_AYiL/MOSAiC_AYiL_FORK.md). Slurm/fielddump rules: [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md). Rebuild `dales4` after changing `MOSAiC_AYiL/src/`.
 
 Human-oriented overview: [README.md](README.md). Script details: [scripts/README.md](scripts/README.md). Zarr post-processing: [python/README.md](python/README.md).
 
@@ -13,10 +13,10 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
 | `scripts/` | **Canonical pipeline** — build, prepare, run, Slurm submit, tests entry |
 | `scripts/lib/` | Shared bash (`run_status.sh`, `mpi_env.sh`, `slurm_defaults.sh`, `pending_dates.sh`) |
 | `scripts/slurm/run_day.slurm` | Slurm job body (one day or one array task) |
-| `dales_ayil/` | AYIL DALES Fortran source; `build/src/dales4` after compile |
+| `MOSAiC_AYiL/` | AYiL DALES Fortran source; `build/src/dales4` after compile |
 | `ayil_config_input_results/YYYYMMDD/` | **`namoptions` tracked in git** (edited pipeline settings). Large files (`scm_in.*.nc`, `prof.inp.*`, `*.001`, …) from [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362) on first `prepare_case`; install uses `rsync --ignore-existing` so Zenodo does not clobber existing/tracked files. Cache: `.cache/zenodo/`. |
 | `runs/YYYYMMDD/` | Run working dirs (gitignored); outputs + status marker files |
-| `sim_dt/` | Versioned **timestep vs sim time** CSVs per AYIL date (walltime); see `sim_dt/README.md` |
+| `sim_dt/` | Versioned **timestep vs sim time** CSVs per AYiL date (walltime); see `sim_dt/README.md` |
 | `python/ayil/` | Merge fielddump tiles → Zarr (`convert`, `fielddump`, `zarr_store`) |
 | `test/` | Bash unit/integration tests (`./test/run_tests.sh`) |
 
@@ -28,22 +28,22 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
 - **Do not weaken tests** or relax tolerances without explicit user approval.
 - **Do not claim** simulations or tests passed without running them when the change touches that path.
 - **Do not convert to Zarr** while a run is in progress — partial `fielddump` NetCDF files cause HDF read errors.
-- **Do not pip-install** Python dependencies; use the `MOSAiC_AYIL` conda env from `python/environment.yml` only.
+- **Do not pip-install** Python dependencies; use the `MOSAiC_AYiL` conda env from `python/environment.yml` only.
 - **Predetermined Zarr chunks** live in `python/ayil/zarr_store.py` as constants (`FIELDDUMP_CHUNKS_*`). Do not add runtime chunk-size heuristics under the same names.
 
 ## Conda environment (Python / Zarr)
 
-- **Env name:** `MOSAiC_AYIL` (override with `AYIL_CONDA_ENV` only if documented for the user).
+- **Env name:** `MOSAiC_AYiL` (override with `AYiL_CONDA_ENV` only if documented for the user).
 - **Definition:** [python/environment.yml](python/environment.yml) — **conda-forge only** (`nodefaults` channel). The `pip` entry is the conda meta-package, not permission to `pip install` packages.
 - **Create/update:**
   ```bash
-  conda env update -n MOSAiC_AYIL -f python/environment.yml
+  conda env update -n MOSAiC_AYiL -f python/environment.yml
   ```
 - **Run tools:**
   ```bash
-  cd python && conda run -n MOSAiC_AYIL python -m ayil.convert runs/20200720
+  cd python && conda run -n MOSAiC_AYiL python -m ayil.convert runs/20200720
   # or: ./scripts/convert_to_zarr.sh runs/20200720  (conda wrapper only)
-  cd python && conda run -n MOSAiC_AYIL pytest -v
+  cd python && conda run -n MOSAiC_AYiL pytest -v
   ```
 - **Zarr conversion logic lives in Python** (`ayil.convert`, `ayil.paths`, `ayil.fielddump`). Do not add path-resolution or progress logic to bash.
 - **Zarr format:** writes **Zarr v3** via `write_dataset_zarr(..., zarr_format=3)` (default); Blosc via `zarr.codecs.BloscCodec`; consolidated metadata on by default (`consolidated=True`). Merged winds (`u`, `v`, `w`) and physical microphysics names — no `u_tile_*` or raw `sv00N` in output.
@@ -54,14 +54,14 @@ Human-oriented overview: [README.md](README.md). Script details: [scripts/README
 cp scripts/env.example scripts/env.local   # gitignored
 ```
 
-`scripts/config.sh` sources `env.local` automatically. Use for modules, `NETCDF_INCLUDE`, `DALES_NPROC`, `OPENMPI_PREFIX`, and optional `AYIL_SLURM_*` overrides.
+`scripts/config.sh` sources `env.local` automatically. Use for modules, `NETCDF_INCLUDE`, `DALES_NPROC`, `OPENMPI_PREFIX`, and optional `AYiL_SLURM_*` overrides.
 
 ## DALES build and run
 
 | Step | Command |
 |------|---------|
 | First-time verify | `./scripts/reproduce.sh` |
-| Build | `./scripts/build_dales.sh` → `dales_ayil/build/src/dales4` |
+| Build | `./scripts/build_dales.sh` → `MOSAiC_AYiL/build/src/dales4` |
 | One day (login/interactive) | `./scripts/run_local.sh 20200720` |
 | Pending days (local, serial) | `./scripts/run_local.sh --pending` |
 | Status table | `./scripts/list_cases.sh` |
@@ -95,12 +95,12 @@ Entry point: **`./scripts/slurm_submit.sh`** (not manual loops of `sbatch` unles
 ```
 
 - Job script: `scripts/slurm/run_day.slurm` → `scripts/run_slurm_day.sh`.
-- **Default Slurm mode:** chunked — jobs chained with `--dependency=afterok` (`AYIL_CHUNK_SIM_SEC` × chunks = `AYIL_DAY_RUNTIME_SEC`, default **10800 s**); restart handoff via `initdlatest*`. Use `--no-chunked` for one job/day only if walltime covers the full day.
+- **Default Slurm mode:** chunked — jobs chained with `--dependency=afterok` (`AYiL_CHUNK_SIM_SEC` × chunks = `AYiL_DAY_RUNTIME_SEC`, default **10800 s**); restart handoff via `initdlatest*`. Use `--no-chunked` for one job/day only if walltime covers the full day.
 - Per-day logs: `runs/YYYYMMDD/logs/{slurm.out,progress.log,dales.log,convert.log}`. Chunk progress: `.ayil_chunk_N_complete`; day done: `.ayil_complete`.
-- **Walltime** (`scripts/lib/slurm_defaults.sh`): `T_wall = (T_fixed + T_sim × R_ref × N_ref / N_mpi) × f_dt` (+ 15% headroom). Defaults: `R_ref=14` @ 64 (from HPC `20191027` @ 32 ranks ~27 s wall/s sim), `AYIL_SIM_DT_USE=0`. Optional `f_dt` from `sim_dt/YYYYMMDD.csv` only after co-calibrating `R_ref` and `AYIL_SIM_DT_REF_SEC` (`estimate_wall_ref.sh`). Bootstrap CSVs: `AYIL_SIM_DT_RECORD=1`; see `sim_dt/README.md`.
-- **Memory:** `--mem = ntasks × 4 GiB + 16 GiB` (override `AYIL_SLURM_MEM` in `env.local`).
+- **Walltime** (`scripts/lib/slurm_defaults.sh`): `T_wall = (T_fixed + T_sim × R_ref × N_ref / N_mpi) × f_dt` (+ 15% headroom). Defaults: `R_ref=14` @ 64 (from HPC `20191027` @ 32 ranks ~27 s wall/s sim), `AYiL_SIM_DT_USE=0`. Optional `f_dt` from `sim_dt/YYYYMMDD.csv` only after co-calibrating `R_ref` and `AYiL_SIM_DT_REF_SEC` (`estimate_wall_ref.sh`). Bootstrap CSVs: `AYiL_SIM_DT_RECORD=1`; see `sim_dt/README.md`.
+- **Memory:** `--mem = ntasks × 4 GiB + 16 GiB` (override `AYiL_SLURM_MEM` in `env.local`).
 - Many **days** can run in parallel (each day = its own 6-job chain); there is no global “one job at a time” cap unless the partition/QOS limits you.
-- Do not invent cluster-specific partition names in code; use optional `AYIL_SLURM_PARTITION` / `AYIL_SLURM_ACCOUNT`.
+- Do not invent cluster-specific partition names in code; use optional `AYiL_SLURM_PARTITION` / `AYiL_SLURM_ACCOUNT`.
 
 ## Simulation config (important facts)
 
@@ -111,7 +111,7 @@ From Zenodo `namoptions` (all ~190 days use the same pattern):
 | `runtime` | `10800` s | **3 h** per day (JAMES paper); `prepare_case.sh` patches staged `namoptions`. Zenodo zip still has `7200`. |
 | `trestart` | `-1` local; `0`/`−1` chunked | Local/`--no-chunked`: no restarts. Slurm chunks: `trestart=0` writes `initdlatest*` at segment end; last chunk `−1`. |
 | `namfielddump` `dtav` | `1800` s | 3D snapshots every **30 min** → **6** times per 3 h run |
-| Chunked Slurm + fielddump | See [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md) | Default `AYIL_CHUNK_SIM_SEC=1800` matches `dtav`. Shorter chunks need [modfielddump `tnext` patch](dales_ayil/MOSAiC_AYIL_FORK.md). Never claim fielddump works from mock chunk tests alone. |
+| Chunked Slurm + fielddump | See [docs/fielddump_and_chunking.md](docs/fielddump_and_chunking.md) | Default `AYiL_CHUNK_SIM_SEC=1800` matches `dtav`. Shorter chunks need [modfielddump `tnext` patch](MOSAiC_AYiL/MOSAiC_AYiL_FORK.md). Never claim fielddump works from mock chunk tests alone. |
 | `namfielddump` `khigh` | `200` | Vertical levels in fielddump |
 | Grid | `320×320×286` (`kmax`) | MPI tiles: `fielddump.III.JJJ.001.nc` |
 
@@ -135,7 +135,7 @@ After `.ayil_complete` exists for a day:
 
 ```bash
 ./test/run_tests.sh
-cd python && conda run -n MOSAiC_AYIL pytest -v
+cd python && conda run -n MOSAiC_AYiL pytest -v
 ./test/run_tests.sh                 # always mock_dales4 (CI / laptop / login safe)
 # Real LES only via scripts/manual/ on a compute node — never part of run_tests.sh
 ```

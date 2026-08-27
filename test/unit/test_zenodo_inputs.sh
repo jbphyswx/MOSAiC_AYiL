@@ -6,17 +6,17 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${REPO_ROOT}/test/lib/test_framework.sh"
 
 (
-  export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
-  export AYIL_SKIP_ZENODO_FETCH=1
+  export MOSAiC_AYiL_ROOT="${REPO_ROOT}"
+  export AYiL_SKIP_ZENODO_FETCH=1
   TMP="$(mktemp -d)"
   trap 'rm -rf "${TMP}"' EXIT
-  export AYIL_INPUTS="${TMP}/inputs"
+  export AYiL_INPUTS="${TMP}/inputs"
   # shellcheck source=../../scripts/lib/zenodo_inputs.sh
   source "${REPO_ROOT}/scripts/lib/zenodo_inputs.sh"
 
-  mkdir -p "${AYIL_INPUTS}/20200720"
-  touch "${AYIL_INPUTS}/20200720/namoptions"
-  touch "${AYIL_INPUTS}/20200720/scm_in.a_year_in_les.20200720.nc"
+  mkdir -p "${AYiL_INPUTS}/20200720"
+  touch "${AYiL_INPUTS}/20200720/namoptions"
+  touch "${AYiL_INPUTS}/20200720/scm_in.a_year_in_les.20200720.nc"
 
   assert_true 'ayil_day_inputs_ready 20200720' "day ready when namoptions and scm_in exist"
   assert_true '! ayil_day_inputs_ready 20990101' "missing day not ready"

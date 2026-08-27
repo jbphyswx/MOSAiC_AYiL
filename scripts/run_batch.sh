@@ -4,7 +4,7 @@
 # Usage:
 #   run_batch.sh prepare [DATE ...]          # only stage inputs
 #   run_batch.sh run [NPROC] [DATE ...]      # run simulations
-#   run_batch.sh run [NPROC]                 # all dates under AYIL_INPUTS
+#   run_batch.sh run [NPROC]                 # all dates under AYiL_INPUTS
 #
 # For HPC, prefer a job array that calls run_case.sh per date instead of this script.
 set -euo pipefail
@@ -32,7 +32,7 @@ fi
 if [[ $# -ge 1 ]]; then
   DATES=("$@")
 else
-  mapfile -t DATES < <(find "${AYIL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  mapfile -t DATES < <(find "${AYiL_INPUTS}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 fi
 
 for DATE in "${DATES[@]}"; do

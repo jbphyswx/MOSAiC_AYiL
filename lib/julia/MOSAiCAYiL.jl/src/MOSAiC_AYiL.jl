@@ -1,0 +1,3 @@
+module MOSAiCAYiL
+
+end # module

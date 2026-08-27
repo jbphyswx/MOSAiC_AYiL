@@ -6,13 +6,13 @@ ayil_monitor_run() {
   local run_dir="$1"
   local log="$2"
   local runtime="$3"
-  local interval="${AYIL_PROGRESS_INTERVAL:-30}"
+  local interval="${AYiL_PROGRESS_INTERVAL:-30}"
   local start_bytes last_bytes now_bytes sim pct disk_h delta
 
   start_bytes="$(ayil_dir_size_bytes "${run_dir}")"
   last_bytes="${start_bytes}"
 
-  while [[ -f "${run_dir}/${AYIL_STATUS_RUNNING}" ]]; do
+  while [[ -f "${run_dir}/${AYiL_STATUS_RUNNING}" ]]; do
     sleep "${interval}"
     [[ -f "${log}" ]] || continue
     now_bytes="$(ayil_dir_size_bytes "${run_dir}")"

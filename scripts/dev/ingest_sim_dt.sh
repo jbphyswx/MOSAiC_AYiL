@@ -22,7 +22,7 @@ source "${SCRIPT_DIR}/../config.sh"
 # shellcheck source=../lib/sim_dt.sh
 source "${SCRIPT_DIR}/../lib/sim_dt.sh"
 
-export AYIL_SIM_DT_FORCE_RECORD=1
+export AYiL_SIM_DT_FORCE_RECORD=1
 
 INGEST_OK=0
 INGEST_SKIP=0
@@ -48,11 +48,11 @@ while (("$#" > 0)); do
   esac
 done
 
-export AYIL_SIM_DT_RECOMPUTE="${RECOMPUTE}"
+export AYiL_SIM_DT_RECOMPUTE="${RECOMPUTE}"
 
 ingest_one() {
   local date="$1"
-  local log="${AYIL_RUNS}/${date}/logs/dales.log"
+  local log="${AYiL_RUNS}/${date}/logs/dales.log"
   local csv nproc log_bytes log_stats old_stats new_stats action
 
   if [[ ! -f "${log}" ]]; then
@@ -63,8 +63,8 @@ ingest_one() {
 
   csv="$(ayil_sim_dt_csv "${date}")"
   nproc=""
-  if [[ -f "${AYIL_RUNS}/${date}/.ayil_complete" ]]; then
-    nproc="$(grep -E '^nproc=' "${AYIL_RUNS}/${date}/.ayil_complete" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -f "${AYiL_RUNS}/${date}/.ayil_complete" ]]; then
+    nproc="$(grep -E '^nproc=' "${AYiL_RUNS}/${date}/.ayil_complete" 2>/dev/null | cut -d= -f2- || true)"
   fi
 
   log_bytes="$(wc -c < "${log}" | tr -d ' ')"
@@ -124,7 +124,7 @@ if (("${#DATES[@]}" > 0)); then
   done
 else
   shopt -s nullglob
-  for log in "${AYIL_RUNS}"/*/logs/dales.log; do
+  for log in "${AYiL_RUNS}"/*/logs/dales.log; do
     date="$(basename "$(dirname "$(dirname "${log}")")")"
     [[ "${date}" =~ ^[0-9]{8}$ ]] || continue
     ingest_one "${date}"

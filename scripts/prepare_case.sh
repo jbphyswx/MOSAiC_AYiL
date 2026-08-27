@@ -3,7 +3,7 @@
 #
 # Usage: prepare_case.sh YYYYMMDD [RUN_DIR]
 #
-# RUN_DIR defaults to ${AYIL_RUNS}/YYYYMMDD
+# RUN_DIR defaults to ${AYiL_RUNS}/YYYYMMDD
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,10 +20,10 @@ if [[ $# -lt 1 ]]; then
 fi
 
 DATE="$1"
-RUN_DIR="${2:-${AYIL_RUNS}/${DATE}}"
+RUN_DIR="${2:-${AYiL_RUNS}/${DATE}}"
 
 ayil_ensure_day_inputs "${DATE}"
-INPUT_DIR="${AYIL_INPUTS}/${DATE}"
+INPUT_DIR="${AYiL_INPUTS}/${DATE}"
 
 mkdir -p "${RUN_DIR}"
 
@@ -44,7 +44,7 @@ if [[ ! -f "${RUN_DIR}/namoptions" ]]; then
   exit 1
 fi
 
-# Paper runtime (10800 s); no restart files unless Slurm chunk mode (AYIL_USE_RESTART_CHUNKS=1).
+# Paper runtime (10800 s); no restart files unless Slurm chunk mode (AYiL_USE_RESTART_CHUNKS=1).
 ayil_apply_prepare_namoptions "${RUN_DIR}/namoptions"
 
 echo "Prepared ${DATE} -> ${RUN_DIR}"

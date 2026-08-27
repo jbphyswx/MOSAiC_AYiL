@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Build argv for a single remote→local rsync of AYIL runs/ (one SSH session).
+# Build argv for a single remote→local rsync of AYiL runs/ (one SSH session).
 #
 # Sourced by scripts/sync_runs_from_hpc.sh and unit tests.
 
@@ -8,28 +8,28 @@ ayil_sync_validate_date() {
   [[ "${1:-}" =~ ^[0-9]{8}$ ]]
 }
 
-# Populate global array AYIL_SYNC_RSYNC_CMD with a complete rsync invocation.
+# Populate global array AYiL_SYNC_RSYNC_CMD with a complete rsync invocation.
 # Options (env or caller):
-#   AYIL_HPC_HOST, AYIL_HPC_USER, AYIL_HPC_ROOT, AYIL_RUNS
-#   AYIL_SYNC_IGNORE_EXISTING=1 (default) — skip files that already exist locally
-#   AYIL_SYNC_DRY_RUN=1 — pass -n
-#   AYIL_SYNC_DATES — space-separated YYYYMMDD list (optional; empty = all runs/)
-#   AYIL_RSYNC_EXTRA — extra rsync flags (quoted string split on whitespace)
-#   AYIL_RSYNC_SSH — remote shell for rsync -e (default: multiplexed ssh -S socket)
+#   AYiL_HPC_HOST, AYiL_HPC_USER, AYiL_HPC_ROOT, AYiL_RUNS
+#   AYiL_SYNC_IGNORE_EXISTING=1 (default) — skip files that already exist locally
+#   AYiL_SYNC_DRY_RUN=1 — pass -n
+#   AYiL_SYNC_DATES — space-separated YYYYMMDD list (optional; empty = all runs/)
+#   AYiL_RSYNC_EXTRA — extra rsync flags (quoted string split on whitespace)
+#   AYiL_RSYNC_SSH — remote shell for rsync -e (default: multiplexed ssh -S socket)
 ayil_sync_runs_build_rsync_cmd() {
   local host user remote_root local_runs dry ignore_existing dates extra rsync_ssh
   local -a cmd includes
 
-  host="${AYIL_HPC_HOST:-login.hpc.caltech.edu}"
-  user="${AYIL_HPC_USER:-${USER}}"
-  remote_root="${AYIL_HPC_ROOT:-${MOSAiC_AYIL_ROOT}}"
-  local_runs="${AYIL_RUNS:-${MOSAiC_AYIL_ROOT}/runs}"
-  dry="${AYIL_SYNC_DRY_RUN:-0}"
-  ignore_existing="${AYIL_SYNC_IGNORE_EXISTING:-1}"
-  dates="${AYIL_SYNC_DATES:-}"
+  host="${AYiL_HPC_HOST:-login.hpc.caltech.edu}"
+  user="${AYiL_HPC_USER:-${USER}}"
+  remote_root="${AYiL_HPC_ROOT:-${MOSAiC_AYiL_ROOT}}"
+  local_runs="${AYiL_RUNS:-${MOSAiC_AYiL_ROOT}/runs}"
+  dry="${AYiL_SYNC_DRY_RUN:-0}"
+  ignore_existing="${AYiL_SYNC_IGNORE_EXISTING:-1}"
+  dates="${AYiL_SYNC_DATES:-}"
 
-  if [[ -z "${remote_root}" || -z "${MOSAiC_AYIL_ROOT:-}" ]]; then
-    echo "ERROR: MOSAiC_AYIL_ROOT must be set (source scripts/config.sh)." >&2
+  if [[ -z "${remote_root}" || -z "${MOSAiC_AYiL_ROOT:-}" ]]; then
+    echo "ERROR: MOSAiC_AYiL_ROOT must be set (source scripts/config.sh)." >&2
     return 1
   fi
 
@@ -55,7 +55,7 @@ ayil_sync_runs_build_rsync_cmd() {
     --exclude='.gitignore'
   )
 
-  extra="${AYIL_RSYNC_EXTRA:-}"
+  extra="${AYiL_RSYNC_EXTRA:-}"
   if [[ -n "${extra}" ]]; then
     # shellcheck disable=SC2206
     cmd+=(${extra})
@@ -65,7 +65,7 @@ ayil_sync_runs_build_rsync_cmd() {
     local d
     for d in ${dates}; do
       if ! ayil_sync_validate_date "${d}"; then
-        echo "ERROR: invalid AYIL date '${d}' (expected YYYYMMDD)." >&2
+        echo "ERROR: invalid AYiL date '${d}' (expected YYYYMMDD)." >&2
         return 1
       fi
       includes+=(--include="${d}/***")
@@ -74,11 +74,11 @@ ayil_sync_runs_build_rsync_cmd() {
     cmd+=("${includes[@]}")
   fi
 
-  if [[ -z "${AYIL_RSYNC_SSH:-}" ]]; then
-    echo "ERROR: AYIL_RSYNC_SSH unset; run ayil_hpc_control_ensure before building rsync cmd." >&2
+  if [[ -z "${AYiL_RSYNC_SSH:-}" ]]; then
+    echo "ERROR: AYiL_RSYNC_SSH unset; run ayil_hpc_control_ensure before building rsync cmd." >&2
     return 1
   fi
-  rsync_ssh="${AYIL_RSYNC_SSH}"
+  rsync_ssh="${AYiL_RSYNC_SSH}"
   cmd+=(
     -e
     "${rsync_ssh}"
@@ -86,14 +86,14 @@ ayil_sync_runs_build_rsync_cmd() {
     "${local_runs}/"
   )
 
-  AYIL_SYNC_RSYNC_CMD=("${cmd[@]}")
+  AYiL_SYNC_RSYNC_CMD=("${cmd[@]}")
 }
 
 # Print one line per argument (safe for tests).
 ayil_sync_runs_format_cmd() {
   local arg
   ayil_sync_runs_build_rsync_cmd || return 1
-  for arg in "${AYIL_SYNC_RSYNC_CMD[@]}"; do
+  for arg in "${AYiL_SYNC_RSYNC_CMD[@]}"; do
     printf '%s\n' "${arg}"
   done
 }

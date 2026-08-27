@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the AYIL DALES executable (dales4) with CMake.
+# Build the AYiL DALES executable (dales4) with CMake.
 #
 # Usage: ./scripts/build_dales.sh
 #
-# Creates: ${DALES_BIN}  (default: dales_ayil/build/src/dales4)
+# Creates: ${DALES_BIN}  (default: MOSAiC_AYiL/build/src/dales4)
 # Prereqs:  ./scripts/check_prerequisites.sh
 set -euo pipefail
 

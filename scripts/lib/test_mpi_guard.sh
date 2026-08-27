@@ -3,7 +3,7 @@
 
 # Return 0 if the current host looks like a batch/interactive compute session.
 ayil_mpi_tests_allowed() {
-  if [[ "${AYIL_ALLOW_LOGIN_MPI_TESTS:-0}" == "1" ]]; then
+  if [[ "${AYiL_ALLOW_LOGIN_MPI_TESTS:-0}" == "1" ]]; then
     return 0
   fi
   local host="${HOSTNAME:-$(hostname -s 2>/dev/null || hostname)}"
@@ -29,6 +29,6 @@ ayil_refuse_login_mpi_tests() {
   echo "  Build here: ./scripts/build_dales.sh" >&2
   echo "  Run MPI tests on a compute node, e.g.:" >&2
   echo "    srun --pty -n 1 -t 30 --mem=64G bash -lc './scripts/manual/smoke_test.sh'" >&2
-  echo "  Override only if you accept the risk: AYIL_ALLOW_LOGIN_MPI_TESTS=1" >&2
+  echo "  Override only if you accept the risk: AYiL_ALLOW_LOGIN_MPI_TESTS=1" >&2
   return 1
 }

@@ -1,6 +1,6 @@
-# MOSAiC_AYIL Python stack (conda-forge only).
-# Create/update: conda env update -n MOSAiC_AYIL -f python/environment.yml
-name: MOSAiC_AYIL
+# MOSAiC_AYiL Python stack (conda-forge only).
+# Create/update: conda env update -n MOSAiC_AYiL -f python/environment.yml
+name: MOSAiC_AYiL
 channels:
   - conda-forge
   - nodefaults

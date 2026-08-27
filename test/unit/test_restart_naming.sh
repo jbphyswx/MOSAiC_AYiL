@@ -8,7 +8,7 @@ source "${REPO_ROOT}/scripts/lib/restart_naming.sh"
 
 # Regression: wrong template from Zenodo cold-start extrapolation (HPC chunk 1 failure).
 WRONG_STARTFILE='initdlatestx000y000.001'
-AYIL_STARTFILE='initdlatestm00000001.001'
+AYiL_STARTFILE='initdlatestm00000001.001'
 RTIMEE=300
 EXP='001'
 
@@ -20,9 +20,9 @@ latest="$(ayil_dales_latest_initd_name "${RTIMEE}" 'x000y014' "${EXP}")"
   fail=1
 }
 
-resolved="$(ayil_dales_resolve_initd_startfile "${AYIL_STARTFILE}" 'x000y014')"
+resolved="$(ayil_dales_resolve_initd_startfile "${AYiL_STARTFILE}" 'x000y014')"
 [[ "${resolved}" == "${latest}" ]] || {
-  echo "FAIL: resolve(${AYIL_STARTFILE})=${resolved} != ${latest}" >&2
+  echo "FAIL: resolve(${AYiL_STARTFILE})=${resolved} != ${latest}" >&2
   fail=1
 }
 
@@ -34,7 +34,7 @@ bad="$(ayil_dales_resolve_initd_startfile "${WRONG_STARTFILE}" 'x000y014')"
 }
 
 # Position 12 must be 'm' (from write template), not 'x'.
-[[ "${AYIL_STARTFILE:11:1}" == 'm' ]] || {
+[[ "${AYiL_STARTFILE:11:1}" == 'm' ]] || {
   echo "FAIL: warm startfile char 12 must be m" >&2
   fail=1
 }
@@ -42,7 +42,7 @@ bad="$(ayil_dales_resolve_initd_startfile "${WRONG_STARTFILE}" 'x000y014')"
 for nproc in 4 8 16 32 64; do
   while read -r cid; do
     lat="$(ayil_dales_latest_initd_name "${RTIMEE}" "${cid}" "${EXP}")"
-    res="$(ayil_dales_resolve_initd_startfile "${AYIL_STARTFILE}" "${cid}")"
+    res="$(ayil_dales_resolve_initd_startfile "${AYiL_STARTFILE}" "${cid}")"
     if [[ "${res}" != "${lat}" ]]; then
       echo "FAIL: nproc=${nproc} cmyid=${cid}: resolve=${res} latest=${lat}" >&2
       fail=1

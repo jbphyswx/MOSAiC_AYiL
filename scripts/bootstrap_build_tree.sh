@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time (idempotent) setup of files missing from the Zenodo dales_ayil zip.
+# One-time (idempotent) setup of files missing from the Zenodo MOSAiC_AYiL zip.
 # Called automatically by build_dales.sh. Safe to run by hand.
 set -euo pipefail
 

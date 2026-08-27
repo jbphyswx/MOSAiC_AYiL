@@ -1,8 +1,8 @@
-# Building dales_ayil
+# Building MOSAiC_AYiL
 
-Do **not** follow `INSTALL.md` in this folder for AYIL runs—that file describes cloning upstream [dalesteam/dales](https://github.com/dalesteam/dales).
+Do **not** follow `INSTALL.md` in this folder for AYiL runs—that file describes cloning upstream [dalesteam/dales](https://github.com/dalesteam/dales).
 
-Use the repo pipeline instead (from `MOSAiC_AYIL` root):
+Use the repo pipeline instead (from `MOSAiC_AYiL` root):
 
 ```bash
 ./scripts/reproduce.sh      # check, bootstrap, build, smoke test

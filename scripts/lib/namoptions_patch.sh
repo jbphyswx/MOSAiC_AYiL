@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# MOSAiC_AYIL overrides applied to per-day ``namoptions`` when staging or running DALES.
+# MOSAiC_AYiL overrides applied to per-day ``namoptions`` when staging or running DALES.
 
 # Replace one namelist assignment (whole line).
 ayil_namoptions_replace() {
@@ -22,7 +22,7 @@ ayil_set_runtime() {
   local namoptions="$1"
   local runtime_sec="$2"
   ayil_namoptions_replace "${namoptions}" runtime \
-    "    runtime = ${runtime_sec}    ! AYIL: simulation length (s)"
+    "    runtime = ${runtime_sec}    ! AYiL: simulation length (s)"
 }
 
 # Insert or replace a namelist key in namoptions.
@@ -44,19 +44,19 @@ ayil_set_ltotruntime() {
   local namoptions="$1"
   local flag="${2:-true}" # true | false
   ayil_namoptions_ensure "${namoptions}" ltotruntime \
-    "    ltotruntime = .${flag}.    ! AYIL: runtime is total since cold start"
+    "    ltotruntime = .${flag}.    ! AYiL: runtime is total since cold start"
 }
 
 # DALES modstartup: trestart < 0 disables all restart file output (initd/inits).
 ayil_disable_restart_writes() {
   ayil_namoptions_replace "$1" trestart \
-    '    trestart = -1    ! AYIL: no restart checkpoints (DALES trestart < 0)'
+    '    trestart = -1    ! AYiL: no restart checkpoints (DALES trestart < 0)'
 }
 
 # trestart = 0: write restart only at end of this segment's runtime.
 ayil_enable_restart_at_segment_end() {
   ayil_namoptions_replace "$1" trestart \
-    '    trestart = 0    ! AYIL: restart at end of this segment only'
+    '    trestart = 0    ! AYiL: restart at end of this segment only'
 }
 
 ayil_set_lwarmstart() {
@@ -78,9 +78,9 @@ ayil_apply_chunk_namoptions() {
   local namoptions="$1"
   local chunk_idx="$2"
   local n_chunks="$3"
-  local chunk_sec="${4:-${AYIL_CHUNK_SIM_SEC}}"
-  local day_sec="${5:-${AYIL_DAY_RUNTIME_SEC}}"
-  local startfile="${6:-${AYIL_RESTART_STARTFILE}}"
+  local chunk_sec="${4:-${AYiL_CHUNK_SIM_SEC}}"
+  local day_sec="${5:-${AYiL_DAY_RUNTIME_SEC}}"
+  local startfile="${6:-${AYiL_RESTART_STARTFILE}}"
 
   if (( chunk_idx < 0 || chunk_idx >= n_chunks )); then
     echo "ERROR: chunk_idx=${chunk_idx} out of range for n_chunks=${n_chunks}" >&2
@@ -118,8 +118,8 @@ ayil_apply_chunk_namoptions() {
 # Stage defaults: paper runtime; restarts only when chunk Slurm mode is enabled later.
 ayil_apply_prepare_namoptions() {
   local namoptions="$1"
-  ayil_set_runtime "${namoptions}" "${AYIL_DAY_RUNTIME_SEC:-10800}"
-  if [[ "${AYIL_USE_RESTART_CHUNKS:-0}" != "1" ]]; then
+  ayil_set_runtime "${namoptions}" "${AYiL_DAY_RUNTIME_SEC:-10800}"
+  if [[ "${AYiL_USE_RESTART_CHUNKS:-0}" != "1" ]]; then
     ayil_disable_restart_writes "${namoptions}"
   fi
 }

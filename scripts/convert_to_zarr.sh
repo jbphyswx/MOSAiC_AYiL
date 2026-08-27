@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Thin launcher: run ``python -m ayil.convert`` in the MOSAiC_AYIL conda env.
+# Thin launcher: run ``python -m ayil.convert`` in the MOSAiC_AYiL conda env.
 # All path resolution, progress, and logging live in Python (see ayil/convert.py).
 #
 # Usage:
@@ -11,13 +11,13 @@
 # refresh when fielddump has more time steps or newer tiles (full rewrite).
 #
 # Equivalent:
-#   cd python && conda run -n MOSAiC_AYIL python -m ayil.convert
+#   cd python && conda run -n MOSAiC_AYiL python -m ayil.convert
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_DIR="${REPO_ROOT}/python"
-CONDA_ENV="${AYIL_CONDA_ENV:-MOSAiC_AYIL}"
+CONDA_ENV="${AYiL_CONDA_ENV:-MOSAiC_AYiL}"
 
 if ! command -v conda >/dev/null 2>&1; then
   echo "ERROR: conda not found" >&2

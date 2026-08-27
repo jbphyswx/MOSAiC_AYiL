@@ -1,4 +1,4 @@
-# MOSAiC_AYIL
+# MOSAiC_AYiL
 
 Regenerate full 3D/4D DALES output for [Schnierstein et al. 2024 (JAMES)](https://doi.org/10.1029/2024MS004296) / [Zenodo 10.5281/zenodo.10491362](https://zenodo.org/records/10491362).
 
@@ -8,24 +8,24 @@ Zenodo provides **profile-averaged** outputs; full horizontal fields require rer
 
 ## Simulation length and Slurm chunking
 
-- **Default integration:** `runtime = 10800` s (**3 h**, JAMES paper). `prepare_case.sh` sets this in each run directory (`AYIL_DAY_RUNTIME_SEC`). Zenodo’s zip still ships `7200` s; git-tracked `namoptions` may lag until updated.
+- **Default integration:** `runtime = 10800` s (**3 h**, JAMES paper). `prepare_case.sh` sets this in each run directory (`AYiL_DAY_RUNTIME_SEC`). Zenodo’s zip still ships `7200` s; git-tracked `namoptions` may lag until updated.
 - **3D fielddump:** `dtav = 1800` → **6** snapshots per 3 h day. Zarr preset uses `FIELDDUMP_CHUNKS_TIME = 6`.
 - **Local runs** (`run_local.sh`): one job per day, **`trestart = -1`** (no restart files).
-- **Slurm (default):** `./scripts/slurm_submit.sh --pending` submits **6 chained jobs per day** (30 min sim each, `AYIL_CHUNK_SIM_SEC=1800`) so each job stays within typical **8 h wall** limits. Chunks warm-start from `initdlatest*`; timed restart files are deleted after each successful chunk; the last chunk does not write restarts. Many days can run in parallel (separate chains). Use `--no-chunked` only if your partition allows one job to finish the full 3 h simulation in walltime.
-- **MPI ranks:** default **64** on Slurm (`AYIL_SLURM_NTASKS`); override in `scripts/env.local`.
+- **Slurm (default):** `./scripts/slurm_submit.sh --pending` submits **6 chained jobs per day** (30 min sim each, `AYiL_CHUNK_SIM_SEC=1800`) so each job stays within typical **8 h wall** limits. Chunks warm-start from `initdlatest*`; timed restart files are deleted after each successful chunk; the last chunk does not write restarts. Many days can run in parallel (separate chains). Use `--no-chunked` only if your partition allows one job to finish the full 3 h simulation in walltime.
+- **MPI ranks:** default **64** on Slurm (`AYiL_SLURM_NTASKS`); override in `scripts/env.local`.
 
 ### Fielddump + chunks (required reading)
 
 **[`docs/fielddump_and_chunking.md`](docs/fielddump_and_chunking.md)** — why `profiles` can look fine while `fielddump` has `time=0`, and how chunk length relates to `dtav`.
 
-**[`dales_ayil/MOSAiC_AYIL_FORK.md`](dales_ayil/MOSAiC_AYIL_FORK.md)** — **explicit list of Fortran changes** from upstream DALES (including `modfielddump.f90`). Rebuild with `./scripts/build_dales.sh` after pull.
+**[`MOSAiC_AYiL/MOSAiC_AYiL_FORK.md`](MOSAiC_AYiL/MOSAiC_AYiL_FORK.md)** — **explicit list of Fortran changes** from upstream DALES (including `modfielddump.f90`). Rebuild with `./scripts/build_dales.sh` after pull.
 
-**Do not** use `AYIL_CHUNK_SIM_SEC` &lt; **1800** unless you have rebuilt `dales4` from this repo’s `dales_ayil` (see fork doc). Values like **300** or **600** with stock `tnext = btime + dtav` produce **empty fielddump** while the LES still runs to completion.
+**Do not** use `AYiL_CHUNK_SIM_SEC` &lt; **1800** unless you have rebuilt `dales4` from this repo’s `MOSAiC_AYiL` (see fork doc). Values like **300** or **600** with stock `tnext = btime + dtav` produce **empty fielddump** while the LES still runs to completion.
 
 ## Reproduce everything (start here)
 
 ```bash
-cd /path/to/MOSAiC_AYIL
+cd /path/to/MOSAiC_AYiL
 ./scripts/reproduce.sh
 ```
 
@@ -44,7 +44,7 @@ cp scripts/env.example scripts/env.local   # edit modules, paths, DALES_NPROC
 | Path | Role |
 |------|------|
 | `scripts/` | **Canonical pipeline** (build, prepare, run, smoke test, Slurm example) |
-| `dales_ayil/` | AYIL DALES source + committed CMake bootstrap files |
+| `MOSAiC_AYiL/` | AYiL DALES source + committed CMake bootstrap files |
 | `ayil_config_input_results/YYYYMMDD/` | `namoptions` in git; Zenodo artifacts auto-downloaded on first run |
 | `runs/` | Simulation working directories (created by scripts; gitignored) |
 | `sim_dt/` | Versioned per-day timestep vs sim-time tables for Slurm wall estimates ([README](sim_dt/README.md)) |
@@ -63,7 +63,7 @@ Use the scripts (they locate `mpirun` via `PATH`, modules, or `OPENMPI_PREFIX`).
 For batch systems such as the [Caltech Resnick HPC cluster](https://www.hpc.caltech.edu) ([resource summary](https://www.hpc.caltech.edu/resources)):
 
 ```bash
-cp scripts/env.example scripts/env.local   # modules, optional AYIL_SLURM_* overrides
+cp scripts/env.example scripts/env.local   # modules, optional AYiL_SLURM_* overrides
 ./scripts/build_dales.sh                   # once on the login node
 ./scripts/list_cases.sh                    # pending vs complete
 ./scripts/slurm_submit.sh --pending --dry-run   # preview; no sbatch
@@ -72,7 +72,7 @@ cp scripts/env.example scripts/env.local   # modules, optional AYIL_SLURM_* over
 
 - **Does not submit** days that already have `runs/YYYYMMDD/.ayil_complete` (unless `--force`).
 - **Does not submit** days marked `.ayil_running` (unless `--force`).
-- Default: **one Slurm job array** for all eligible days; Slurm schedules tasks as resources allow (no artificial concurrency cap unless you set `AYIL_SLURM_ARRAY_MAX` in `env.local`).
+- Default: **one Slurm job array** for all eligible days; Slurm schedules tasks as resources allow (no artificial concurrency cap unless you set `AYiL_SLURM_ARRAY_MAX` in `env.local`).
 - Slurm CPU/memory/time defaults are tuned for Caltech HPC but are **only environment defaults** — override in `env.local` on other clusters.
 
 See **[scripts/README.md](scripts/README.md)** for `sbatch` options, single-day jobs, and monitoring.
@@ -81,7 +81,7 @@ See **[scripts/README.md](scripts/README.md)** for `sbatch` options, single-day 
 
 ```bash
 ./test/run_tests.sh                    # bash pipeline
-cd python && conda run -n MOSAiC_AYIL pytest   # Zarr conversion
+cd python && conda run -n MOSAiC_AYiL pytest   # Zarr conversion
 ```
 
 ## Zarr output (after a run finishes)

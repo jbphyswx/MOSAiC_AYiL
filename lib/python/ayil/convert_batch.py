@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ayil.convert import AYIL_COMPLETE, AYIL_RUNNING, convert_run
+from ayil.convert import AYiL_COMPLETE, AYiL_RUNNING, convert_run
 from ayil.convert_stamps import fielddump_newer_than_zarr
 from ayil.fielddump import fielddump_has_snapshots, find_fielddump_tiles
 
@@ -16,7 +16,7 @@ _DATE_DIR = re.compile(r"^\d{8}$")
 
 def is_run_active(run_dir: Path) -> bool:
     """True when DALES is marked running and the day is not complete."""
-    return (run_dir / AYIL_RUNNING).is_file() and not (run_dir / AYIL_COMPLETE).is_file()
+    return (run_dir / AYiL_RUNNING).is_file() and not (run_dir / AYiL_COMPLETE).is_file()
 
 
 def discover_run_dirs(runs_root: Path) -> list[Path]:

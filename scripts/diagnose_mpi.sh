@@ -19,8 +19,8 @@ fi
 
 echo ""
 echo "=== Slot probe (mpirun /bin/true) ==="
-for n in "${AYIL_GRID_FACTORS[@]}"; do
-  if "${MPIRUN}" ${AYIL_MPIRUN_EXTRA:-} -np "${n}" /bin/true &>/dev/null; then
+for n in "${AYiL_GRID_FACTORS[@]}"; do
+  if "${MPIRUN}" ${AYiL_MPIRUN_EXTRA:-} -np "${n}" /bin/true &>/dev/null; then
     echo "  OK  np=${n}"
   else
     echo "  FAIL np=${n}"
@@ -29,7 +29,7 @@ for n in "${AYIL_GRID_FACTORS[@]}"; do
 done
 
 max="$(ayil_mpi_probe_max_slots)"
-resolved="$(ayil_resolve_nproc "${AYIL_DEFAULT_NPROC:-64}")"
+resolved="$(ayil_resolve_nproc "${AYiL_DEFAULT_NPROC:-64}")"
 echo ""
 echo "Max Open MPI slots (probed): ${max}"
 echo "Recommended DALES_NPROC (grid 320): ${resolved}"

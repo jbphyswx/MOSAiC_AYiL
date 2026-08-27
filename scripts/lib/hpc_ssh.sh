@@ -4,25 +4,25 @@
 # Password + Duo do not work reliably under `rsync -e ssh` (remote rsync --server).
 # Open an SSH master socket first, then point rsync at it.
 
-# Set AYIL_HPC_HOST, AYIL_HPC_USER from environment.
+# Set AYiL_HPC_HOST, AYiL_HPC_USER from environment.
 ayil_hpc_ssh_load_defaults() {
-  AYIL_HPC_HOST="${AYIL_HPC_HOST:-login.hpc.caltech.edu}"
-  AYIL_HPC_USER="${AYIL_HPC_USER:-${USER}}"
+  AYiL_HPC_HOST="${AYiL_HPC_HOST:-login.hpc.caltech.edu}"
+  AYiL_HPC_USER="${AYiL_HPC_USER:-${USER}}"
 }
 
 # Path to ControlMaster socket (must stay under ~90 chars; OpenSSH adds a short suffix).
 ayil_hpc_control_socket() {
   local sock
   ayil_hpc_ssh_load_defaults
-  if [[ -n "${AYIL_HPC_CONTROL_PATH:-}" ]]; then
-    sock="${AYIL_HPC_CONTROL_PATH}"
+  if [[ -n "${AYiL_HPC_CONTROL_PATH:-}" ]]; then
+    sock="${AYiL_HPC_CONTROL_PATH}"
   else
     sock="${HOME}/.ssh/ayil-hpc"
   fi
   if [[ ${#sock} -gt 90 ]]; then
     echo "ERROR: control socket path too long for Unix domain socket (${#sock} chars, max ~90)." >&2
     echo "  ${sock}" >&2
-    echo "  Set AYIL_HPC_CONTROL_PATH to a short path, e.g. \${HOME}/.ssh/ayil-hpc" >&2
+    echo "  Set AYiL_HPC_CONTROL_PATH to a short path, e.g. \${HOME}/.ssh/ayil-hpc" >&2
     return 1
   fi
   printf '%s\n' "${sock}"
@@ -33,8 +33,8 @@ ayil_hpc_control_alive() {
   local sock host user
   sock="$(ayil_hpc_control_socket)" || return 1
   ayil_hpc_ssh_load_defaults
-  host="${AYIL_HPC_HOST}"
-  user="${AYIL_HPC_USER}"
+  host="${AYiL_HPC_HOST}"
+  user="${AYiL_HPC_USER}"
   [[ -S "${sock}" ]] || return 1
   ssh -S "${sock}" -O check "${user}@${host}" &>/dev/null
 }
@@ -54,7 +54,7 @@ ayil_hpc_control_start() {
   sock="$(ayil_hpc_control_socket)" || return 1
   dir="$(dirname "${sock}")"
   mkdir -p "${dir}"
-  persist="${AYIL_HPC_CONTROL_PERSIST:-2h}"
+  persist="${AYiL_HPC_CONTROL_PERSIST:-2h}"
 
   if ayil_hpc_control_alive; then
     echo "HPC SSH master already active: ${sock}"
@@ -71,7 +71,7 @@ ayil_hpc_control_start() {
     rm -f "${sock}"
   fi
 
-  echo "Opening SSH master to ${AYIL_HPC_USER}@${AYIL_HPC_HOST} (password + Duo once) ..."
+  echo "Opening SSH master to ${AYiL_HPC_USER}@${AYiL_HPC_HOST} (password + Duo once) ..."
   echo "Socket: ${sock} (persist ${persist})"
 
   # Do not run a remote command (avoids HPC .bashrc/modules); -fnNT keeps the master up.
@@ -86,7 +86,7 @@ ayil_hpc_control_start() {
     -o KbdInteractiveAuthentication=yes \
     -tt \
     -fnNT \
-    "${AYIL_HPC_USER}@${AYIL_HPC_HOST}" \
+    "${AYiL_HPC_USER}@${AYiL_HPC_HOST}" \
     </dev/tty; then
     echo "ERROR: SSH login failed." >&2
     return 1
@@ -120,7 +120,7 @@ ayil_hpc_control_status() {
   local sock
   sock="$(ayil_hpc_control_socket)" || return 1
   ayil_hpc_ssh_load_defaults
-  echo "Host:   ${AYIL_HPC_USER}@${AYIL_HPC_HOST}"
+  echo "Host:   ${AYiL_HPC_USER}@${AYiL_HPC_HOST}"
   echo "Socket: ${sock}"
   if ayil_hpc_control_alive; then
     echo "Status: active (rsync can use this connection without re-authenticating)"
@@ -132,25 +132,25 @@ ayil_hpc_control_status() {
 
 # Ensure master exists; start interactively if needed (password/Duo once per persist window).
 ayil_hpc_control_ensure() {
-  if [[ -n "${AYIL_RSYNC_SSH:-}" ]]; then
+  if [[ -n "${AYiL_RSYNC_SSH:-}" ]]; then
     return 0
   fi
 
   if ayil_hpc_control_alive; then
-    export AYIL_RSYNC_SSH
-    AYIL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
+    export AYiL_RSYNC_SSH
+    AYiL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
     return 0
   fi
 
-  if [[ "${AYIL_SKIP_SSH_SETUP:-0}" == "1" ]]; then
-    echo "ERROR: no HPC SSH master and AYIL_SKIP_SSH_SETUP=1." >&2
+  if [[ "${AYiL_SKIP_SSH_SETUP:-0}" == "1" ]]; then
+    echo "ERROR: no HPC SSH master and AYiL_SKIP_SSH_SETUP=1." >&2
     echo "  Socket: $(ayil_hpc_control_socket 2>/dev/null || echo '?')" >&2
     return 1
   fi
 
   ayil_hpc_control_start || return 1
-  export AYIL_RSYNC_SSH
-  AYIL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
+  export AYiL_RSYNC_SSH
+  AYiL_RSYNC_SSH="$(ayil_hpc_rsync_ssh_cmd)"
   ayil_hpc_control_alive || {
     echo "ERROR: SSH master did not start." >&2
     return 1

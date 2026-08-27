@@ -6,15 +6,15 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${REPO_ROOT}/test/lib/test_framework.sh"
 
 (
-  export MOSAiC_AYIL_ROOT="${REPO_ROOT}"
-  export AYIL_RUNS="${REPO_ROOT}/runs"
-  export AYIL_HPC_HOST=login.hpc.caltech.edu
-  export AYIL_HPC_USER=testuser
-  export AYIL_HPC_ROOT=/home/testuser/Research_Schneider/CliMA/MOSAiC_AYIL
-  export AYIL_SYNC_DRY_RUN=0
-  export AYIL_SYNC_IGNORE_EXISTING=1
-  export AYIL_RSYNC_SSH="ssh -S ${HOME}/.ssh/ayil-hpc -o ControlMaster=no -o BatchMode=yes"
-  unset AYIL_SYNC_DATES
+  export MOSAiC_AYiL_ROOT="${REPO_ROOT}"
+  export AYiL_RUNS="${REPO_ROOT}/runs"
+  export AYiL_HPC_HOST=login.hpc.caltech.edu
+  export AYiL_HPC_USER=testuser
+  export AYiL_HPC_ROOT=/home/testuser/Research_Schneider/CliMA/MOSAiC_AYiL
+  export AYiL_SYNC_DRY_RUN=0
+  export AYiL_SYNC_IGNORE_EXISTING=1
+  export AYiL_RSYNC_SSH="ssh -S ${HOME}/.ssh/ayil-hpc -o ControlMaster=no -o BatchMode=yes"
+  unset AYiL_SYNC_DATES
 
   # shellcheck source=../../scripts/lib/sync_runs_from_hpc.sh
   source "${REPO_ROOT}/scripts/lib/sync_runs_from_hpc.sh"
@@ -41,7 +41,7 @@ source "${REPO_ROOT}/test/lib/test_framework.sh"
     echo "FAIL: rsync -e should use multiplexed ssh" >&2
     exit 1
   }
-  [[ "${_joined}" == *"testuser@login.hpc.caltech.edu:/home/testuser/Research_Schneider/CliMA/MOSAiC_AYIL/runs/"* ]] || {
+  [[ "${_joined}" == *"testuser@login.hpc.caltech.edu:/home/testuser/Research_Schneider/CliMA/MOSAiC_AYiL/runs/"* ]] || {
     echo "FAIL: unexpected remote source: ${_joined}" >&2
     exit 1
   }
@@ -60,7 +60,7 @@ source "${REPO_ROOT}/test/lib/test_framework.sh"
     exit 1
   }
 
-  export AYIL_SYNC_DATES="20200720 20200721"
+  export AYiL_SYNC_DATES="20200720 20200721"
   mapfile -t _argv2 < <(ayil_sync_runs_format_cmd)
   _joined2=$(
     IFS=,
@@ -79,7 +79,7 @@ source "${REPO_ROOT}/test/lib/test_framework.sh"
     exit 1
   }
 
-  export AYIL_SYNC_IGNORE_EXISTING=0
+  export AYiL_SYNC_IGNORE_EXISTING=0
   mapfile -t _argv3 < <(ayil_sync_runs_format_cmd)
   _joined3=$(
     IFS=,

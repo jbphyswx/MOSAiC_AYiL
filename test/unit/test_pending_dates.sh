@@ -18,7 +18,7 @@ else
   test_fail "missing dir should be submittable"
 fi
 
-touch "${TMP}/${AYIL_STATUS_COMPLETE}"
+touch "${TMP}/${AYiL_STATUS_COMPLETE}"
 if ! ayil_should_submit_date "${TMP}" 0; then
   test_pass "complete not submittable without force"
 else
@@ -31,16 +31,16 @@ else
   test_fail "complete should submit with force"
 fi
 
-printf 'date=20200720\nstarted_utc=2020-01-01T00:00:00Z\nnproc=4\npid=%s\n' "$$" > "${TMP}/${AYIL_STATUS_RUNNING}"
-rm -f "${TMP}/${AYIL_STATUS_COMPLETE}" "${TMP}/${AYIL_STATUS_FAILED}"
+printf 'date=20200720\nstarted_utc=2020-01-01T00:00:00Z\nnproc=4\npid=%s\n' "$$" > "${TMP}/${AYiL_STATUS_RUNNING}"
+rm -f "${TMP}/${AYiL_STATUS_COMPLETE}" "${TMP}/${AYiL_STATUS_FAILED}"
 if ! ayil_should_submit_date "${TMP}" 0; then
   test_pass "live running marker blocks submit"
 else
   test_fail "running should not submit without force"
 fi
 
-printf 'pid=999999999\nstarted_utc=2020-01-01T00:00:00Z\n' > "${TMP}/${AYIL_STATUS_RUNNING}"
-rm -f "${TMP}/${AYIL_STATUS_FAILED}"
+printf 'pid=999999999\nstarted_utc=2020-01-01T00:00:00Z\n' > "${TMP}/${AYiL_STATUS_RUNNING}"
+rm -f "${TMP}/${AYiL_STATUS_FAILED}"
 if ayil_should_submit_date "${TMP}" 0; then
   test_pass "stale running (dead pid) is recovered and submittable"
 else
@@ -48,7 +48,7 @@ else
 fi
 
 touch "${TMP}/.ayil_chunk_0_complete"
-rm -f "${TMP}/${AYIL_STATUS_RUNNING}" "${TMP}/${AYIL_STATUS_COMPLETE}"
+rm -f "${TMP}/${AYiL_STATUS_RUNNING}" "${TMP}/${AYiL_STATUS_COMPLETE}"
 if ayil_should_submit_date "${TMP}" 0; then
   test_pass "partial chunk day is submittable"
 else
