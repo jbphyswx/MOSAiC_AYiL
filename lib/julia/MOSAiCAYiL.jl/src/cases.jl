@@ -1,21 +1,28 @@
-#=
+"""
+    Cases
 
-
-
-=#
-
+The 190 AYiL calendar days and the case type keyed on a date.
+"""
 module Cases
+
+export AbstractMOSAiCAYiLCase,
+    MOSAiCAYiLCase,
+    MOSAiCAYiL_dates,
+    n_cases,
+    date_string,
+    parse_MOSAiCAYiL_date,
+    is_MOSAiCAYiL_date,
+    case,
+    case_name,
+    date_index
 
 using Dates: Dates
 
 abstract type AbstractMOSAiCAYiLCase end
 
-struct MOSAiCAYiLCase <: AbstractMOSAiCAYiLCase
-    date::Dates.Date
-end
-
-const MOSAiCAYiL_Dates = map(Dates.Date,(
-    "20191016", "20191022", "20191024", "20191025", "20191026", 
+"""The 190 published AYiL dates, ascending (2019-10-16 … 2020-09-11)."""
+const MOSAiCAYiL_dates = map(Base.Fix2(Dates.Date, Dates.DateFormat("yyyymmdd")),(
+    "20191016", "20191022","20191024", "20191025", "20191026", 
     "20191027", "20191028", "20191029", "20191030", "20191031", 
     "20191101", "20191102", "20191103", "20191105", "20191106", 
     "20191107", "20191108", "20191109", "20191110", "20191111",
@@ -54,55 +61,81 @@ const MOSAiCAYiL_Dates = map(Dates.Date,(
     "20200831", "20200901", "20200902", "20200903", "20200905", 
     "20200906", "20200907", "20200909", "20200910", "20200911"
 ))
+const MOSAiCAYiL_dates_set = Set(MOSAiCAYiL_dates)
 
-const num_MOSAiCAYiL_Dates = 190 # length(MOSAiCAYiL_DATES)
-
-
-# Locations
-const MOSAiCAYiL_locations = Dict{Dates.Date, NamedTuple{(:lon, :lat), Tuple{Float64, Float64}}}(
-    error("not implemented yet")
-)
+"""Number of published AYiL days."""
+n_cases() = 190 #length(MOSAiCAYiL_dates)
 
 
 
+date_string(d::Dates.Date) = Dates.format(d, "yyyymmdd")
 
-# Time Periods
-const MOSAiCAYiL_time_periods = Dict{Dates.Date, NamedTuple{(:start, :end), Tuple{Float64, Float64}}}(
-    error("not implemented yet")
-)
+function parse_MOSAiCAYiL_date(date::AbstractString)
+    (length(date) == 8 && all(isdigit, date)) ||
+        error("An AYiL date is `yyyymmdd`; got `$date`.")
+    return Dates.Date(date, Dates.dateformat"yyyymmdd")
+end
 
+parse_MOSAiCAYiL_date(d::Dates.Date) = d
 
-# Grids
-const MOSAiCAYiL_grids = (;
-    zc = error("not implemented yet"), # is per case i think
-    zf = error("not implemented yet"), # is per case i think
-)
+@inline is_MOSAiCAYiL_date(d::Dates.Date) = (d ∈ MOSAiCAYiL_dates_set)
 
+is_MOSAiCAYiL_date(date::AbstractString) = is_MOSAiCAYiL_date(parse_MOSAiCAYiL_date(date))
 
-const MOSAiCAYiL_dimensions = (;
-    nx = error("not implemented yet"),
-    ny = error("not implemented yet"),
-    nz = error("not implemented yet"),
-)
+function _require_MOSAiCAYiL_date(d::Dates.Date)
+    is_MOSAiCAYiL_date(d) || error(
+        "`$d` is not one of the $(n_cases()) published AYiL days \
+         ($(first(MOSAiCAYiL_dates)) … $(last(MOSAiCAYiL_dates))).",
+    )
+    return d
+end
 
-const MOSAiCAYiL_Δ = (;
-    Δx = error("not implemented yet"),
-    Δy = error("not implemented yet"),
-    Δz = error("not implemented yet"), # this is stretch array, per case i think
-    Δt = error("not implemented yet"),
-)
+"""
+    MOSAiCAYiLCase(date)
 
+One AYiL day, identified by its calendar date.
 
-const MOSAiCAYiL_metadata = (;
-    dates = MOSAiCAYiL_Dates,
-    locations = MOSAiCAYiL_locations,
-    time_periods = MOSAiCAYiL_time_periods,
-    grids = MOSAiCAYiL_grids,
-    dimensions = MOSAiCAYiL_dimensions,
-    Δs = MOSAiCAYiL_Δ,
-)
+Accepts a `Date` or a `yyyymmdd` string. The date must be one of the 190 published
+days; invalid dates error rather than being silently dropped.
+"""
+struct MOSAiCAYiLCase <: AbstractMOSAiCAYiLCase
+    date::Dates.Date
+    function MOSAiCAYiLCase(d::Dates.Date)
+        return new(_require_MOSAiCAYiL_date(d))
+    end
+end
 
+MOSAiCAYiLCase(date::AbstractString) = MOSAiCAYiLCase(parse_MOSAiCAYiL_date(date))
 
+date_string(c::MOSAiCAYiLCase) = date_string(c.date)
+parse_MOSAiCAYiL_date(c::MOSAiCAYiLCase) = c.date
+is_MOSAiCAYiL_date(c::MOSAiCAYiLCase) = true
 
+Base.show(io::IO, c::MOSAiCAYiLCase) = print(io, "MOSAiCAYiLCase(", date_string(c), ")")
+
+Dates.Date(c::MOSAiCAYiLCase) = c.date
+
+case_name(c::MOSAiCAYiLCase) = "AYiL_$(date_string(c))"
+
+"""
+    case(date)
+
+The AYiL case for `date`, given as `yyyymmdd` or a `Date`.
+"""
+case(date::AbstractString) = MOSAiCAYiLCase(date)
+case(date::Dates.Date) = MOSAiCAYiLCase(date)
+case(c::MOSAiCAYiLCase) = c
+
+"""Catalog index of `date` in [`MOSAiCAYiL_dates`](@ref), 1-based."""
+function date_index(d::Dates.Date)
+    i = findfirst(isequal(d), MOSAiCAYiL_dates)
+    isnothing(i) && error(
+        "`$d` is not one of the $(n_cases()) published AYiL days.",
+    )
+    return i
+end
+
+date_index(c::MOSAiCAYiLCase) = date_index(c.date)
+date_index(date::AbstractString) = date_index(parse_MOSAiCAYiL_date(date))
 
 end # module

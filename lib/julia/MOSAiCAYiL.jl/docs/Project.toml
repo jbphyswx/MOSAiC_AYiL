@@ -1,0 +1,8 @@
+# Documenter / examples environments are optional workspace members.
+# Contract notes live in this directory as Markdown, not a generated site.
+
+[deps]
+MOSAiCAYiL = "7147eef5-9ac3-41de-95f6-4171e6dd1b45"
+
+[sources]
+MOSAiCAYiL = {path = ".."}
