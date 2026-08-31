@@ -113,9 +113,9 @@ integrate from `ps`.
 `T_v = T (1 + (R_v/R_d − 1) q − ql − qi)` with specific humidities; `ρ = p / (R_d T_v)`.
 Returns `(z, ρ)`. Never use `rhobf` as air density.
 """
-function scm_in_air_density(forcing)
-    R_d = oftype(float(forcing.ta[1]), DALES_CONSTANTS.R_d)
-    R_v = oftype(float(forcing.ta[1]), DALES_CONSTANTS.R_v)
+function scm_in_air_density(forcing; R_d = DALES_CONSTANTS.R_d, R_v = DALES_CONSTANTS.R_v)
+    R_d = oftype(float(forcing.ta[1]), R_d)
+    R_v = oftype(float(forcing.ta[1]), R_v)
     T_v =
         forcing.ta .* (
             1 .+ (R_v / R_d - 1) .* forcing.q .- forcing.ql .- forcing.qi
