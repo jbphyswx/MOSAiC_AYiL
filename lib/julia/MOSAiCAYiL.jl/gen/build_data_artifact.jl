@@ -7,7 +7,7 @@ lazy artifact, and print the resulting `Artifacts.toml` entry.
 Run once; the entry it prints is what ships in `Artifacts.toml`, after which the
 package downloads the data on first use and nobody needs to run this again.
 
-    julia --project=gen gen/build_data_artifact.jl
+    julia --project=gen -e 'include("gen/build_data_artifact.jl"); build_data_artifact()'
 
 Zenodo record 10.5281/zenodo.10491362, CC-BY-4.0:
 "A year in LES: Standardized daily high-resolution Large Eddy Simulations of the
@@ -27,14 +27,17 @@ const SIZE_BYTES = 910_740_303
 artifacts_toml() = joinpath(dirname(@__DIR__), "Artifacts.toml")
 
 """
-    main(; zip = joinpath(tempdir(), "\$NAME.zip"), keep_zip = true)
+    build_data_artifact(; zip = joinpath(tempdir(), "\$NAME.zip"), keep_zip = true)
 
 Download (unless `zip` already holds the right bytes), hash, unpack and bind.
 
 The zip carries a single top-level directory; day directories are lifted to the
 artifact root so the artifact *is* the data root.
 """
-function main(; zip::AbstractString = joinpath(tempdir(), "$NAME.zip"), keep_zip::Bool = true)
+function build_data_artifact(;
+    zip::AbstractString = joinpath(tempdir(), "$NAME.zip"),
+    keep_zip::Bool = true,
+)
     if isfile(zip) && filesize(zip) == SIZE_BYTES
         @info "reusing download" zip
     else
@@ -79,5 +82,3 @@ function main(; zip::AbstractString = joinpath(tempdir(), "$NAME.zip"), keep_zip
     print(read(artifacts_toml(), String))
     return nothing
 end
-
-main()

@@ -4,47 +4,21 @@
 Read `scm_in` time record 1 for every catalog day and write
 `src/generated/day_scalars.jl`.
 
-    julia --project=gen gen/extract_day_scalars.jl
+    julia --project=gen -e 'include("gen/extract_day_scalars.jl"); write_day_scalars()'
 
-Uses the package's lazy artifact. Pass `root` to `main` for a local tree.
-Record 2 is bitwise identical on 190/190 days; this script does not read it.
+`root` names a local tree, and defaults to the package's lazy artifact. Record 2 is bitwise
+identical on 190/190 days; this script does not read it.
 """
 
-using Artifacts: Artifacts
-using Dates: Dates
-using LazyArtifacts: LazyArtifacts
+using MOSAiCAYiL: MOSAiCAYiL as MA
 using NCDatasets: NCDatasets as NC
 
-const PKG = dirname(@__DIR__)
-const OUT = joinpath(PKG, "src", "generated", "day_scalars.jl")
-const ARTIFACT_NAME = "ayil_config_input_results"
-
-# Catalog dates, same order as `src/cases.jl`.
-include(joinpath(PKG, "src", "cases.jl"))
-
-function artifact_root()
-    toml = joinpath(PKG, "Artifacts.toml")
-    hash = Artifacts.artifact_hash(ARTIFACT_NAME, toml)
-    isnothing(hash) && error(
-        "The `$ARTIFACT_NAME` artifact is not bound in $toml. Run \
-         `gen/build_data_artifact.jl`.",
-    )
-    LazyArtifacts.ensure_artifact_installed(ARTIFACT_NAME, toml)
-    return Artifacts.artifact_path(hash)
-end
-
-function data_root(; root = artifact_root())
-    isdir(root) || error("`root` is not a directory: $root")
-    return root
-end
-
-scm_in_path(root, date) =
-    joinpath(root, date, "scm_in.a_year_in_les.$date.nc")
+const OUT = joinpath(dirname(@__DIR__), "src", "generated", "day_scalars.jl")
 
 function read_scalars(path)
     NC.NCDataset(path, "r") do ds
-        s(name) = Array(ds[name])[1]
-        nccn = Array(ds["n_ccn"])[:, 1]
+        s(name) = MA.read_variable(ds, name; file = :scm_in).data[1]
+        nccn = MA.read_variable(ds, "n_ccn"; file = :scm_in).data[:, 1]
         lo, hi = extrema(nccn)
         lo == hi || error("$path n_ccn is not uniform in z: $lo … $hi")
         return (;
@@ -76,8 +50,8 @@ function emit_ntuple(io, name, values)
     println(io, "    ),")
 end
 
-function main(; root = data_root())
-    n = Cases.n_cases()
+function write_day_scalars(; root = MA.data_root())
+    n = MA.n_cases()
     fields = (
         :lat,
         :lon,
@@ -95,9 +69,8 @@ function main(; root = data_root())
         :n_ccn,
     )
     cols = Dict(f => Vector{Float32}(undef, n) for f in fields)
-    for (i, d) in enumerate(Cases.MOSAiCAYiL_dates)
-        ymd = Cases.date_string(d)
-        path = scm_in_path(root, ymd)
+    for (i, d) in enumerate(MA.MOSAiCAYiL_dates)
+        path = MA.scm_in_path(d; root)
         isfile(path) || error("missing $path")
         s = read_scalars(path)
         for f in fields
@@ -119,5 +92,3 @@ function main(; root = data_root())
     println("wrote $OUT ($n days)")
     return nothing
 end
-
-main()

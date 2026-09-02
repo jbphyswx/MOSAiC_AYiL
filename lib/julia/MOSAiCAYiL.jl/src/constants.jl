@@ -48,6 +48,32 @@ t_end(::MOSAiCAYiLCase) = PUBLISHED_RUNTIME_S
 const FIELDDUMP_NZ = 200
 
 
+# --- scm_in global attributes that are the same on all 190 days -------------- #
+
+"""
+`N` [m^-3] of the Meyers ice-nucleus formula, `scm_in`'s `in_n_inuc`.
+
+DALES reads it as `N_inuc` and forms `n = N exp(a + b min(s_ice, s_lim)) / rho`
+(`modbulkmicro3.f90:3648`). The per-day Fletcher coefficients are
+[`inp_fletcher_n`](@ref) and [`inp_fletcher_b`](@ref).
+"""
+const INP_MEYERS_N = 1000.0
+
+"""
+`scm_in`'s `in_a_inuc` and `in_b_inuc`, which DALES assigns and never reads.
+
+They reach `a_inuc`/`b_inuc` (`modbulkmicro3.f90:147-148`), but the nucleation rate is
+formed from the module's own `a_M92`/`b_M92` (`:3648-3649`, `:3690-3691`, `:3741-3742`), so
+changing them changes nothing. Recorded because they describe the archive, not the run.
+"""
+const INP_MEYERS_AB_UNUSED = (a = -0.639, b = 12.96)
+
+"""`scm_in` soil moisture bounds [m^3/m^3]: `wilting_point` and `field_capacity`."""
+const SOIL_MOISTURE_BOUNDS = (wilting_point = 0.1715, field_capacity = 0.32275)
+
+"""The window [h UTC] each day's forcing is a composite average over."""
+const COMPOSITE_WINDOW_UTC = (5.0, 11.0)
+
 # --- Ice initialization diameters ------------------------------------------- #
 
 """Paper §2.3.2: ice placed at 55 μm."""
@@ -94,7 +120,8 @@ const NAMELIST = (;
 
 # """
 # Namelist values written on all 190 days and overwritten every step from `scm_in`
-# (`modtimedep.f90`). Do not use as physics; per-day values are the day-scalar table.
+# (`modtimedep.f90`). Not physics: the per-day values are the day-scalar table, and
+# `albedoav = 0.06` is an open-ocean albedo that applies to none of these days.
 # """
 # const NAMELIST_PLACEHOLDERS = (;
 #     xlat = 78.41,
@@ -103,6 +130,7 @@ const NAMELIST = (;
 #     z0hav = 8.5e-4,
 #     albedoav = 0.06,
 # )
+
 
 """
     nudging_parameters(case)
@@ -128,19 +156,16 @@ SB3 cloud-ice size and fall-speed coefficients, from DALES `modmicrodata3.f90`.
 Mean particle mass `x` [kg] maps to diameter as `D = a x^b` and to fall speed as
 `v = α x^β (ρ_ref/ρ)^γ`, with `x` bounded to `[x_min, x_max]`.
 """
-const MOSAiCAYiL_SB3_Ice_Params = (;
-    a = 0.217, 
+const SB3_ICE_PARAMS = (;
+    a = 0.217,
     b = 0.302115,
     α = 41.9,
     β = 0.36,
     γ = 0.5,
-    x_min = 1.0e-12, # qi_min
-    x_max = 1.0e-7, # qi_max
+    x_min = 1.0e-12,      # qi_min
+    x_max = 1.0e-7,       # qi_max
     ρ_ref = 1.225,
 )
-
-"""Default SB3 ice coefficients as `Float64`, the type DALES stored them in."""
-const SB3_ICE = MOSAiCAYiL_SB3_Ice_Params
 
 """Deposition-nucleated ice number cap [m⁻³] (paper §2.2.2: 200 L⁻¹)."""
 const N_I_MAX = 200.0e3
@@ -155,16 +180,16 @@ Mean cloud-ice particle mass [kg], `q/n`, clamped to SB3's bounds.
 
 Both arguments are per unit *mass*: `sv007` is a specific number.
 """
-sb3_mean_ice_mass(qi::FT, Ni::FT; x_min::FT = FT(SB3_ICE.x_min), x_max::FT = FT(SB3_ICE.x_max)) where {FT} = clamp(qi / Ni, x_min, x_max)
+sb3_mean_ice_mass(qi::FT, Ni::FT; x_min::FT = FT(SB3_ICE_PARAMS.x_min), x_max::FT = FT(SB3_ICE_PARAMS.x_max)) where {FT} = clamp(qi / Ni, x_min, x_max)
 sb3_mean_ice_mass(qi::FT, Ni::FT, p::NamedTuple) where {FT} = sb3_mean_ice_mass(qi, Ni; x_min = FT(p.x_min), x_max = FT(p.x_max))
 
-"""Mean cloud-ice diameter [m] from the mean particle mass, `D = a x^b`."""
-sb3_ice_diameter(qi::FT; a::FT = FT(SB3_ICE.a), b::FT = FT(SB3_ICE.b)) where {FT} = a * qi^b
-sb3_ice_diameter(qi::FT, p::NamedTuple) where {FT} = sb3_ice_diameter(qi; a = FT(p.a), b = FT(p.b))
+"""Mean cloud-ice diameter [m] from the mean particle mass `x` [kg], `D = a x^b`."""
+sb3_ice_diameter(x::FT; a::FT = FT(SB3_ICE_PARAMS.a), b::FT = FT(SB3_ICE_PARAMS.b)) where {FT} = a * x^b
+sb3_ice_diameter(x::FT, p::NamedTuple) where {FT} = sb3_ice_diameter(x; a = FT(p.a), b = FT(p.b))
 
-"""Mean cloud-ice fall speed [m/s] from the mean particle mass and air density."""
-sb3_ice_fall_speed(qi::FT, ρ::FT; α::FT = FT(SB3_ICE.α), β::FT = FT(SB3_ICE.β), γ::FT = FT(SB3_ICE.γ), ρ_ref::FT = FT(SB3_ICE.ρ_ref)) where {FT} = α * qi^β * (ρ_ref / ρ)^γ
-sb3_ice_fall_speed(qi::FT, ρ::FT, p::NamedTuple) where {FT} = sb3_ice_fall_speed(qi, ρ; α = FT(p.α), β = FT(p.β), γ = FT(p.γ), ρ_ref = FT(p.ρ_ref))
+"""Mean cloud-ice fall speed [m/s] from the mean particle mass `x` [kg] and air density."""
+sb3_ice_fall_speed(x::FT, ρ::FT; α::FT = FT(SB3_ICE_PARAMS.α), β::FT = FT(SB3_ICE_PARAMS.β), γ::FT = FT(SB3_ICE_PARAMS.γ), ρ_ref::FT = FT(SB3_ICE_PARAMS.ρ_ref)) where {FT} = α * x^β * (ρ_ref / ρ)^γ
+sb3_ice_fall_speed(x::FT, ρ::FT, p::NamedTuple) where {FT} = sb3_ice_fall_speed(x, ρ; α = FT(p.α), β = FT(p.β), γ = FT(p.γ), ρ_ref = FT(p.ρ_ref))
 
 """
     dales_tke_seed(z::FT; e12_min::FT = FT(DALES_CONSTANTS.e12_min), decay_length::FT = FT(50)) where {FT}

@@ -52,13 +52,20 @@ Test.@testset "TKE seed" begin
 end
 
 Test.@testset "surface blend (file-free)" begin
+    b = MA.DefaultThermodynamicsBackend()
     Test.@test MA.surface_temperature(0.4, 271.0, 250.0) ≈ 0.6 * 271.0 + 0.4 * 250.0
     q = MA.qseaicefrctsurf(0.5, 271.35, 250.0, 1.0e5)
     Test.@test q > 0
     # not q_sat of the blended temperature: e_s is exponential in T
     T_blend = MA.surface_temperature(0.5, 271.35, 250.0)
-    es_blend = MA.esat_liquid(T_blend)
-    q_blend =
-        (MA.DALES_CONSTANTS.R_d / MA.DALES_CONSTANTS.R_v) * es_blend / 1.0e5
-    Test.@test q ≠ q_blend
+    es_blend = MA.tetens_saturation_vapor_pressure(b, T_blend)
+    Test.@test q ≠ MA.surface_q_vap_saturation(b, es_blend, 1.0e5)
+
+    # the surface uses Tetens and the interior Murphy-Koop; they are not the same function
+    Test.@test MA.tetens_saturation_vapor_pressure(b, 260.0) ≠
+               MA.saturation_vapor_pressure_liq(b, 260.0)
+    # and the surface q_sat drops the (1-ε)e the interior keeps
+    es = MA.tetens_saturation_vapor_pressure(b, 271.35)
+    Test.@test MA.surface_q_vap_saturation(b, es, 1.0e5) <
+               MA.q_vap_saturation_from_pressure(b, es, 1.0e5)
 end

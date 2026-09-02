@@ -86,12 +86,8 @@ end
 day_dir(date::Dates.Date; kwargs...) = day_dir(date_string(date); kwargs...)
 day_dir(c::MOSAiCAYiLCase; kwargs...) = day_dir(c.date; kwargs...)
 
-_yyyymmdd(date::AbstractString) = date
-_yyyymmdd(date::Dates.Date) = date_string(date)
-_yyyymmdd(c::MOSAiCAYiLCase) = date_string(c)
-
 scm_in_path(date; kwargs...) =
-    joinpath(day_dir(date; kwargs...), "scm_in.a_year_in_les.$(_yyyymmdd(date)).nc")
+    joinpath(day_dir(date; kwargs...), "scm_in.a_year_in_les.$(date_string(date)).nc")
 
 les_profiles_path(date; kwargs...) =
     joinpath(day_dir(date; kwargs...), "profiles.001.nc")
@@ -105,3 +101,39 @@ samptend_path(date; kwargs...) =
     joinpath(day_dir(date; kwargs...), "samptend.001.nc")
 
 namoptions_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "namoptions")
+
+# The other six files of a day directory. DALES's plain-text inputs and its text copies of
+# `tmser`; `prof.inp.001` is unused by these runs, `ltestbed` taking the `scm_in` branch.
+
+prof_inp_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "prof.inp.001")
+
+baseprof_inp_path(date; kwargs...) =
+    joinpath(day_dir(date; kwargs...), "baseprof.inp.001")
+
+ckd_inp_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "ckd.inp.001")
+
+cldwtr_inp_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "cldwtr.inp.001")
+
+tmser1_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "tmser1.001")
+
+tmsurf_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "tmsurf.001")
+
+"""
+    day_files(date; root = data_root())
+
+Every file of one AYiL day, as `name => path`, whether or not it exists on disk.
+"""
+day_files(date; kwargs...) = (;
+    scm_in = scm_in_path(date; kwargs...),
+    profiles = les_profiles_path(date; kwargs...),
+    tmser = tmser_path(date; kwargs...),
+    mphys = mphys_path(date; kwargs...),
+    samptend = samptend_path(date; kwargs...),
+    namoptions = namoptions_path(date; kwargs...),
+    prof_inp = prof_inp_path(date; kwargs...),
+    baseprof_inp = baseprof_inp_path(date; kwargs...),
+    ckd_inp = ckd_inp_path(date; kwargs...),
+    cldwtr_inp = cldwtr_inp_path(date; kwargs...),
+    tmser1 = tmser1_path(date; kwargs...),
+    tmsurf = tmsurf_path(date; kwargs...),
+)

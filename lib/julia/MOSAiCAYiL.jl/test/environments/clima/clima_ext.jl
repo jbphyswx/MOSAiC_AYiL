@@ -14,7 +14,7 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
 
     FT = Float64
     c = MA.case("20200503")
-    fd = MA.read_scm_in(c)
+    fd = MA.testbed_forcing(c)
 
     Test.@testset "params" begin
         params = MA.ClimaAtmos_MOSAiCAYiL_params(FT, c)
@@ -57,7 +57,7 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
 
     Test.@testset "setup condensate split" for date in ("20200503", "20200219")
         day = MA.case(date)
-        forcing_data = MA.read_scm_in(day)
+        forcing_data = MA.testbed_forcing(day)
         faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
         grid = MA.mosaic_grid(FT; faces)
         z = MA.mosaic_z(grid)

@@ -69,6 +69,7 @@ n_cases() = 190 #length(MOSAiCAYiL_dates)
 
 
 date_string(d::Dates.Date) = Dates.format(d, "yyyymmdd")
+date_string(date::AbstractString) = date_string(parse_MOSAiCAYiL_date(date))
 
 function parse_MOSAiCAYiL_date(date::AbstractString)
     (length(date) == 8 && all(isdigit, date)) ||

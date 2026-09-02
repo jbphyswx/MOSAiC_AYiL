@@ -30,21 +30,96 @@ _column_profile(z, values) = Intp.extrapolate(
 # --- Parameters ------------------------------------------------------------- #
 
 """
+Which `MOSAiCAYiL.DALES_CONSTANTS` field supplies each ClimaParams parameter.
+
+The keys are ClimaParams' names, so this mapping is the whole of what is CliMA-specific
+about the DALES parameter set. It is a mapping rather than a second table of numbers so a
+correction to `DALES_CONSTANTS` cannot leave an override behind holding the old value.
+
+`Thermodynamics` reads `gas_constant_dry_air` / `isobaric_specific_heat_dry_air`; RRTMGP's
+gas optics reads `molar_mass_*` / `adiabatic_exponent_dry_air` instead, so both pairs are
+set and kept consistent — the molar masses and the exponent are derived in
+[`dales_parameter_overrides`](@ref) rather than stored.
+
+Two differences no parameter can remove: DALES holds `L_v` constant where `Thermodynamics`
+uses `L_v(T)`, so matching at `T_0` leaves CliMA 1.2% high at 260 K, 2.1% at 250 K and 4.0%
+at 230 K; and DALES's saturation vapour pressure is Tetens/Murray rather than
+Clausius–Clapeyron.
+"""
+const DALES_TO_CLIMAPARAMS = (;
+    gas_constant_dry_air = (:R_d, "DALES `rd`"),
+    gas_constant_vapor = (:R_v, "DALES `rv`"),
+    isobaric_specific_heat_dry_air = (:cp_d, "DALES `cp`"),
+    latent_heat_vaporization_at_reference = (:L_v, "DALES `rlv`"),
+    latent_heat_sublimation_at_reference = (
+        :L_s,
+        "DALES SB3 `rlvi`, the value its microphysics used; `riv = 2.84e6` in modglobal is \
+         declared but never referenced",
+    ),
+    temperature_water_freeze = (:T_melt, "DALES `tmelt`"),
+    potential_temperature_reference_pressure = (
+        :p_ref, "DALES `pref0`, the reference pressure of its Exner function",
+    ),
+    gravitational_acceleration = (:grav, "DALES `grav`"),
+    von_karman_constant = (
+        :von_karman, "DALES `fkar`, used by its Monin-Obukhov surface layer",
+    ),
+    stefan_boltzmann_constant = (:stefan_boltzmann, "DALES `boltz`"),
+    density_liquid_water = (:ρ_water, "DALES `rhow`"),
+)
+
+"""
+    dales_parameter_overrides(; constants = MOSAiCAYiL.DALES_CONSTANTS)
+
+The reference DALES runs' constants as a `ClimaParams` override dict.
+
+Every entry is read out of `constants` through [`DALES_TO_CLIMAPARAMS`](@ref); the three
+RRTMGP entries with no DALES counterpart are computed from it. The universal gas constant comes
+from `ClimaParams` itself.
+"""
+function dales_parameter_overrides(::Type{FT} = Float64; constants = MOSAiCAYiL.DALES_CONSTANTS) where {FT}
+    entry(value, description) =
+        Dict{String, Any}("value" => FT(value), "type" => "float",
+                          "description" => description)
+    overrides = Dict{String, Any}(
+        String(name) => entry(
+            getproperty(constants, field),
+            "$note; from MOSAiCAYiL.DALES_CONSTANTS.$field",
+        ) for (name, (field, note)) in pairs(DALES_TO_CLIMAPARAMS)
+    )
+    R = CP.get_parameter_values(
+        CP.create_toml_dict(FT), "universal_gas_constant",
+    ).universal_gas_constant
+    overrides["molar_mass_dry_air"] = entry(
+        R / constants.R_d,
+        "universal_gas_constant / R_d, so the molar mass matches `gas_constant_dry_air`",
+    )
+    overrides["molar_mass_water"] = entry(
+        R / constants.R_v,
+        "universal_gas_constant / R_v, so the molar mass matches `gas_constant_vapor`",
+    )
+    overrides["adiabatic_exponent_dry_air"] = entry(
+        constants.R_d / constants.cp_d,
+        "R_d / cp_d, matching `gas_constant_dry_air` / `isobaric_specific_heat_dry_air`",
+    )
+    return overrides
+end
+
+"""
     ClimaAtmos_MOSAiCAYiL_toml_overrides()
     ClimaAtmos_MOSAiCAYiL_toml_overrides(case; ccn, params)
 
-ClimaParams override dict: [`MOSAiCAYiL.DALES_THERMODYNAMICS`](@ref), then the day's
+ClimaParams override dict: [`dales_parameter_overrides`](@ref), then the day's
 CCN number when a case is given. `params` is a further dict that wins.
 """
-MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_toml_overrides() =
-    MOSAiCAYiL.parameter_overrides()
+MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_toml_overrides() = dales_parameter_overrides()
 
 function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_toml_overrides(
     c::MOSAiCAYiL.MOSAiCAYiLCase;
     ccn::Real = MOSAiCAYiL.n_ccn(c),
     params = nothing,
 )
-    overrides = MOSAiCAYiL.parameter_overrides()
+    overrides = dales_parameter_overrides()
     overrides["prescribed_cloud_droplet_number_concentration"] =
         Dict{String, Any}("value" => Float64(ccn), "type" => "float")
     if !isnothing(params)
@@ -110,7 +185,7 @@ function MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(
     c::MOSAiCAYiL.MOSAiCAYiLCase;
     root = MOSAiCAYiL.data_root(),
     time_index::Int = 1,
-    forcing = MOSAiCAYiL.read_scm_in(c; root, time_index),
+    forcing = MOSAiCAYiL.testbed_forcing(c; root, time_index),
     nudging = MOSAiCAYiL.nudging_parameters(c),
     z_inv_min::Real = MOSAiCAYiL.INVERSION_SEARCH_MIN,
     z_inv_max::Real = MOSAiCAYiL.INVERSION_SEARCH_MAX,
@@ -174,14 +249,9 @@ function ClimaAtmos.external_forcing_cache(
         _fill_column!(field, ClimaAtmos.interp_vertical_prof(z, forcing.z, values))
         field
     end
-    thermo = ClimaAtmos.Parameters.thermodynamics_params(params)
+    scratch() = fill!(similar(Y.c, FT), zero(FT))
     return (;
         z = collect(FT, z),
-        Lv_over_cp = FT(
-            TD.Parameters.LH_v0(thermo) / TD.Parameters.cp_d(thermo),
-        ),
-        Rd_over_cp = FT(TD.Parameters.R_d(thermo) / TD.Parameters.cp_d(thermo)),
-        p_ref = FT(TD.Parameters.p_ref_theta(thermo)),
         ᶜT_nudge = sampled(forcing.ta),
         ᶜqt_nudge = sampled(forcing.hus),
         ᶜu_nudge = sampled(forcing.ua),
@@ -191,9 +261,9 @@ function ClimaAtmos.external_forcing_cache(
         ᶜdqtdt_hadv = sampled(forcing.dqtdt_hadv),
         ᶜdudt_hadv = sampled(forcing.dudt_hadv),
         ᶜdvdt_hadv = sampled(forcing.dvdt_hadv),
-        ᶜθ_l = similar(Y.c, FT),
-        ᶜinv_τ = similar(Y.c, FT),
-        ᶜinv_τ_q = similar(Y.c, FT),
+        ᶜθ_l = scratch(),
+        ᶜinv_τ = scratch(),
+        ᶜinv_τ_q = scratch(),
     )
 end
 
@@ -277,7 +347,7 @@ function MOSAiCAYiL.mosaic_scm_coriolis(
     params,
     root = MOSAiCAYiL.data_root(),
     time_index::Int = 1,
-    forcing = MOSAiCAYiL.read_scm_in(c; root, time_index),
+    forcing = MOSAiCAYiL.testbed_forcing(c; root, time_index),
     latitude::Real = MOSAiCAYiL.latitude(c),
     omega = ClimaAtmos.Parameters.Omega(params),
 ) where {FT <: AbstractFloat}
@@ -386,7 +456,7 @@ end
 Initial state of one AYiL day, plus the forcing, insolation, and surface values
 needed to pass the setup to `ClimaAtmos.AtmosSimulation`.
 
-The default density is [`MOSAiCAYiL.scm_in_air_density`](@ref) (design.md §8),
+The default density is [`MOSAiCAYiL.scm_in_air_density`](@ref),
 not [`MOSAiCAYiL.les_density`](@ref). Pass `density = les_density(date)` to use
 the archive's `rhof` at t = 300 s instead. Never `rhobf`.
 """
@@ -404,7 +474,7 @@ function MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(
     c::MOSAiCAYiL.MOSAiCAYiLCase;
     root = MOSAiCAYiL.data_root(),
     time_index::Int = 1,
-    forcing_data = MOSAiCAYiL.read_scm_in(c; root, time_index),
+    forcing_data = MOSAiCAYiL.testbed_forcing(c; root, time_index),
     density = MOSAiCAYiL.scm_in_air_density(forcing_data),
     tke = MOSAiCAYiL.dales_tke_seed,
     insolation = MOSAiCAYiL.MOSAiCInsolation(FT, c),
@@ -578,7 +648,7 @@ const CLIMAATMOS_FROM_DALES =
         "va" => (f = read -> read("v"), units = "m s^-1"),
         "rhoa" => (f = read -> read("rhof"), units = "kg m^-3"),
         "pfull" => (
-            f = read -> MOSAiCAYiL.dales_presf(
+            f = read -> MOSAiCAYiL.pressure_from_face(
                 read("presh"), read("rhof"), read("zt"), read("zm"),
             ),
             units = "Pa",
@@ -594,10 +664,16 @@ const CLIMAATMOS_FROM_DALES =
         "rsucs" => (f = read -> abs.(read("swuca")), units = "W m^-2"),
         "cdnc" => (f = read -> read("sv003") .* read("rhof"), units = "m^-3"),
         "ncra" => (f = read -> read("sv001") .* read("rhof"), units = "m^-3"),
+        # `ql` and not the SB3 cloud-liquid scalar `sv005`: the thermodynamic liquid DALES's
+        # saturation adjustment produced is what its θ_l carries.
         "ta" => (
-            f = read -> MOSAiCAYiL.dales_temperature(
-                read("thl"), read("ql"), read("presh"), read("rhof"),
-                read("zt"), read("zm"),
+            f = read -> MOSAiCAYiL.temperature_from_liquid_ice_pottemp.(
+                MOSAiCAYiL.DefaultThermodynamicsBackend(),
+                read("thl"),
+                MOSAiCAYiL.pressure_from_face(
+                    read("presh"), read("rhof"), read("zt"), read("zm"),
+                ),
+                read("ql"),
             ),
             units = "K",
         ),
@@ -624,7 +700,9 @@ function MOSAiCAYiL.climaatmos_field(
 )
     if haskey(CLIMAATMOS_FLUX_FROM_DALES, short_name)
         raw, level = CLIMAATMOS_FLUX_FROM_DALES[short_name]
-        f = MOSAiCAYiL.dales_field(raw, date; root, translate_units = false)
+        f = MOSAiCAYiL.read_variable(
+            raw, date; root, file = :profiles, translate_units = false,
+        )
         k = level === :surface ? 1 : size(f.data, 1)
         return (; z = f.z[k], f.time, data = abs.(f.data[k, :]), units = "W m^-2")
     end
@@ -635,8 +713,12 @@ function MOSAiCAYiL.climaatmos_field(
         )
     end
     sources = NamedTuple[]
+    # every entry of `CLIMAATMOS_FROM_DALES` is a `profiles.001.nc` variable, and `cfrac`
+    # names a different quantity in `tmser.001.nc`
     function read(raw)
-        f = MOSAiCAYiL.dales_field(raw, date; root, translate_units = false)
+        f = MOSAiCAYiL.read_variable(
+            raw, date; root, file = :profiles, translate_units = false,
+        )
         push!(sources, f)
         return f.data
     end

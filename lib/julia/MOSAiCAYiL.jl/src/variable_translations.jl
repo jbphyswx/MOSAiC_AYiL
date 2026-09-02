@@ -3,16 +3,16 @@
     Machinery to convert between the raw DALES archive names and readable
     physical names, with the archive's unit mislabelling corrected.
 
-    The archive carries ~700 distinct fields, so the naming is handled by rule
-    rather than by list: the SB3 scalar families, the microphysics species x
-    process grid, and the tendency-budget process x sample grid each follow a
-    scheme, and every name in them is covered.
+    The archive carries 607 variables across its four netCDF files, so the naming is
+    handled by rule rather than by list: the SB3 scalar families, the microphysics
+    species x process grid, and the tendency-budget process x sample grid each follow
+    a scheme, and every name in them is covered. `tmser` is the exception and needs a
+    table, its names being irregular.
 
     Units are corrected in one place, because the files get three things wrong:
     the number scalars are per unit mass but labelled with the mass family's
     units, `precep_*`/`*_rate` claim kg/m2 but are a mixing ratio times a fall
     speed, and the potential-temperature tendencies claim K/kg/s but are K/s.
-    `docs/design.md` section 3 records all three.
 
 =#
 
@@ -145,7 +145,7 @@ to record k−1: the first goes to record 0 and is lost, the value at `time[t]` 
 the sample for `time[t+1]`, and the last record is never written. Verified against
 the data: `qrmn[t]` matches genstat's own `sv002[t+1]` to 5e-4 relative against
 0.6 at every other offset, and the final record is fill on 190/190 days.
-[`dales_field`](@ref) puts them back on the times they are averages for.
+[`read_variable`](@ref) puts them back on the times they are averages for.
 
 **Five state the wrong units**, sharing the label `W/m^2` with the two that really
 are fluxes: `qrmn` is `sum(q_hr)` (`:1126`); `nrrain` is `rhof*sum(n_hr)` (`:1122`),
@@ -158,6 +158,15 @@ tendencies' own `#/m3/s` is right — `Npav = rhof*avfield` (`:1416`).
 precipitation and not total. `dvrmn` sums `modmicrodata`'s `Dvr`, which SB3 never
 fills — its `imicro` guard is commented out (`:1128`) — so it carries no
 information here.
+
+**Two of the `qt` tendencies are constant zero.** `qtpaccr` is announced as the accretion
+tendency but the `slabsum` that would fill it is commented out (`:1445-1448`), leaving the
+zeroed `avfield`, so like `dvrmn` it carries no information. `qtpsed` is zero deliberately
+(`:1462-1464`, "rain sedimentation does not change qt"). The other three are real:
+`qtpauto = -sum(dq_hr_au)` (`:1428`), `qtpevap = -sum(dq_hr_ev)` (`:1479`), and `qtptot`
+their sum (`:2299`). `qt` here is DALES's total water, `q_v + q_l` — its saturation
+adjustment is liquid-only and ice is a separate scalar, so its total holds fewer species
+than the name suggests.
 """
 const BULKMICROSTAT3 = Dict{String, Tuple{String, String}}(
     "cfrac" => ("cloud_fraction", "1"),
@@ -183,6 +192,220 @@ const BULKMICROSTAT3 = Dict{String, Tuple{String, String}}(
     "qtpsed" => ("q_tot_tendency_sedimentation", "kg/kg/s"),
     "qtpevap" => ("q_tot_tendency_evaporation", "kg/kg/s"),
     "qtptot" => ("q_tot_tendency_microphysics", "kg/kg/s"),
+)
+
+"""
+    TMSER
+
+The 52 variables of `tmser.001.nc`, as `raw => (description, units)`.
+
+They need a table rather than a rule: the names are irregular, and the file is on its own
+120-record 60 s axis where the profiles are 24 records of 300 s averages, so a bar must be
+averaged over five samples before it is compared with a profile integral.
+
+Units are the archive's own except `qtstr`, which the file labels `K` while calling it a
+humidity scale: it is `q* = -wq/ustar`, and the file's own `wq` (`kg/kg m/s`) and `ustar`
+(`m/s`) fix it at `kg/kg`.
+
+Two of the archive's long names are unreliable, so the description is keyed on the variable
+name: `giwp_max` is announced as "Graupel Snow Ice-water path" and `sfc_precw_av` shares
+"Average surface precipitation" with `sfc_prec_av`, which is a different quantity in
+different units.
+
+`vtke` keeps its stated `kg/s` even though a vertical integral of a specific kinetic energy
+is `kg/s^2`; nothing in the archive settles which the values are.
+"""
+const TMSER = Dict{String, Tuple{String, String}}(
+    "cfrac" => ("cloud_fraction", "1"),
+    "zb" => ("cloud_base_height", "m"),
+    "zc_av" => ("cloud_top_height_mean", "m"),
+    "zc_max" => ("cloud_top_height_max", "m"),
+    "zi" => ("boundary_layer_height", "m"),
+    "we" => ("entrainment_velocity", "m/s"),
+    "lwp_bar" => ("liquid_water_path_thermodynamic", "kg/m^2"),
+    "lwp_max" => ("liquid_water_path_thermodynamic_max", "kg/m^2"),
+    "wmax" => ("w_max", "m/s"),
+    "vtke" => ("tke_vertical_integral", "kg/s"),
+    "lmax" => ("q_liquid_max", "kg/kg"),
+    "ustar" => ("friction_velocity", "m/s"),
+    "tstr" => ("temperature_scale", "K"),
+    "qtstr" => ("humidity_scale", "kg/kg"),
+    "obukh" => ("obukhov_length", "m"),
+    "thlskin" => ("thetal_skin", "K"),
+    "z0" => ("z0_unfilled_sentinel", "m"),
+    "wtheta" => ("surface_kinematic_temperature_flux", "K m/s"),
+    "wthetav" => ("surface_kinematic_virtual_temperature_flux", "K m/s"),
+    "wq" => ("surface_kinematic_moisture_flux", "kg/kg m/s"),
+    "cl_frac" => ("cloud_fraction_column_liquid", "1"),
+    "ci_frac" => ("cloud_fraction_column_ice", "1"),
+    "ctot_frac" => ("cloud_fraction_column_total", "1"),
+    "zb_l_av" => ("cloud_base_height_liquid_mean", "m"),
+    "zb_l_min" => ("cloud_base_height_liquid_min", "m"),
+    "zc_l_av" => ("cloud_top_height_liquid_mean", "m"),
+    "zc_l_max" => ("cloud_top_height_liquid_max", "m"),
+    "zb_i_av" => ("cloud_base_height_ice_mean", "m"),
+    "zb_i_min" => ("cloud_base_height_ice_min", "m"),
+    "zc_i_av" => ("cloud_top_height_ice_mean", "m"),
+    "zc_i_max" => ("cloud_top_height_ice_max", "m"),
+    "clwp_bar" => ("q_cloud_liquid_path", "kg/m^2"),
+    "clwp_max" => ("q_cloud_liquid_path_max", "kg/m^2"),
+    "rlwp_bar" => ("q_rain_path", "kg/m^2"),
+    "rlwp_max" => ("q_rain_path_max", "kg/m^2"),
+    "icwp_bar" => ("q_cloud_ice_path", "kg/m^2"),
+    "icwp_max" => ("q_cloud_ice_path_max", "kg/m^2"),
+    "siwp_bar" => ("q_snow_path", "kg/m^2"),
+    "siwp_max" => ("q_snow_path_max", "kg/m^2"),
+    "giwp_bar" => ("q_graupel_path", "kg/m^2"),
+    "giwp_max" => ("q_graupel_path_max", "kg/m^2"),
+    "sfc_precw_av" => ("surface_precipitation_mass_flux", "kg/m^2/s"),
+    "sfc_prec_av" => ("surface_precipitation_energy_flux", "W/m^2"),
+    "SW_up_ca_TOA" => ("rsu_toa_clear", "W/m^2"),
+    "SW_dn_ca_TOA" => ("rsd_toa_clear", "W/m^2"),
+    "LW_up_ca_TOA" => ("rlu_toa_clear", "W/m^2"),
+    "LW_dn_ca_TOA" => ("rld_toa_clear", "W/m^2"),
+    "SW_up_TOA" => ("rsu_toa", "W/m^2"),
+    "SW_dn_TOA" => ("rsd_toa", "W/m^2"),
+    "LW_up_TOA" => ("rlu_toa", "W/m^2"),
+    "LW_dn_TOA" => ("rld_toa", "W/m^2"),
+)
+
+"""
+    SCM_IN
+
+The 77 variables of `scm_in.a_year_in_les.<date>.nc`, as `raw => (description, units)`.
+
+The ERA5 testbed forcing DALES was driven with, on its own axes: `nlev` full levels stored
+**top-down** from about 85 km, `nlevp1` faces, `nlevs` soil levels, and two time records.
+[`read_variable`](@ref) returns the atmospheric levels ascending. The level count is a
+property of the day, not of the ensemble — 3037 on 9 days, 3038 on 79, 3039 on 48, 3040 on
+21, 3041 on 24 and 3042 on 9.
+
+Every variable is bitwise identical between the two time records on all 190 days except
+`time`, `second` and `base_time`, the file being one 05:00–11:00 UTC composite written twice.
+
+`q_skin` carries its units and its long name in each other's attribute (`units` reads "skin
+reservoir content", `long_name` reads "m of water"), so both are given here. `sv` is labelled
+`whatever`.
+
+The names ending `_local` are the value at the domain midpoint and the ones without are the
+domain average; DALES reads the midpoint set (`modtestbed.f90:630-631`). Neither is the
+unmarked default here, so both carry a qualifier.
+"""
+const SCM_IN = Dict{String, Tuple{String, String}}(
+    # axes and time
+    "nlev" => ("level_index", "1"),
+    "nlevp1" => ("level_index_face", "1"),
+    "nlevs" => ("soil_level_index", "1"),
+    "time" => ("time", "s"),
+    "second" => ("second_of_sequence", "s"),
+    "date" => ("date", "yyyymmdd"),
+    "base_time" => ("epoch_time", "s"),
+    "height_f" => ("height", "m"),
+    "height_h" => ("height_face", "m"),
+    "pressure_f" => ("pressure", "Pa"),
+    "pressure_h" => ("pressure_face", "Pa"),
+    "gz_f" => ("geopotential", "m^2/s^2"),
+    # state, domain averaged
+    "t" => ("temperature_domain_mean", "K"),
+    "q" => ("q_vapor_domain_mean", "kg/kg"),
+    "ql" => ("q_cloud_liquid_domain_mean", "kg/kg"),
+    "qi" => ("q_cloud_ice_domain_mean", "kg/kg"),
+    "u" => ("u_domain_mean", "m/s"),
+    "v" => ("v_domain_mean", "m/s"),
+    "cloud_fraction" => ("cloud_fraction_domain_mean", "1"),
+    "o3" => ("q_ozone", "kg/kg"),
+    "omega" => ("pressure_velocity", "Pa/s"),
+    # state, at the domain midpoint
+    "t_local" => ("temperature_midpoint", "K"),
+    "q_local" => ("q_vapor_midpoint", "kg/kg"),
+    "ql_local" => ("q_cloud_liquid_midpoint", "kg/kg"),
+    "qi_local" => ("q_cloud_ice_midpoint", "kg/kg"),
+    "u_local" => ("u_midpoint", "m/s"),
+    "v_local" => ("v_midpoint", "m/s"),
+    "cc_local" => ("cloud_fraction_midpoint", "1"),
+    # large-scale forcing
+    "tadv" => ("temperature_tendency_advection_horizontal", "K/s"),
+    "qadv" => ("q_vapor_tendency_advection_horizontal", "kg/kg/s"),
+    "ladv" => ("q_cloud_liquid_tendency_advection_horizontal", "kg/kg/s"),
+    "iadv" => ("q_cloud_ice_tendency_advection_horizontal", "kg/kg/s"),
+    "uadv" => ("u_tendency_advection_horizontal", "m/s^2"),
+    "vadv" => ("v_tendency_advection_horizontal", "m/s^2"),
+    "aadv" => ("cloud_fraction_tendency_advection_horizontal", "s^-1"),
+    "ug" => ("u_geostrophic", "m/s"),
+    "vg" => ("v_geostrophic", "m/s"),
+    # radiation and microphysics input
+    "fradLWnet" => ("radiative_flux_net_longwave_face", "W/m^2"),
+    "fradSWnet" => ("radiative_flux_net_shortwave_face", "W/m^2"),
+    "n_ccn" => ("n_ccn", "m^-3"),
+    "sv" => ("sv", ""),
+    # surface
+    "ps" => ("surface_pressure", "Pa"),
+    "lat" => ("trajectory_latitude", "degrees_north"),
+    "lon" => ("trajectory_longitude", "degrees_east"),
+    "lat_grid" => ("grid_latitude", "degrees_north"),
+    "lon_grid" => ("grid_longitude", "degrees_east"),
+    "albedo" => ("albedo", "1"),
+    "albedo_snow" => ("albedo_snow", "1"),
+    "snow" => ("snow_depth_liquid_equivalent", "m"),
+    "density_snow" => ("snow_density", "kg/m^3"),
+    "t_snow" => ("snow_temperature", "K"),
+    "mom_rough" => ("z0_momentum", "m"),
+    "heat_rough" => ("z0_heat", "m"),
+    "sea_ice_frct" => ("sea_ice_fraction", "1"),
+    "t_skin" => ("t_skin", "K"),
+    "t_skin_ocean" => ("t_skin_ocean", "K"),
+    "t_skin_seaice" => ("t_skin_seaice", "K"),
+    "open_sst" => ("open_sst", "K"),
+    "lsm" => ("land_sea_mask", "1"),
+    "sfc_sens_flx" => ("surface_sensible_heat_flux", "W/m^2"),
+    "sfc_lat_flx" => ("surface_latent_heat_flux", "W/m^2"),
+    "q_skin" => ("skin_reservoir_content", "m"),
+    # soil and sea ice
+    "h_soil" => ("soil_layer_thickness", "m"),
+    "q_soil" => ("soil_moisture", "m^3/m^3"),
+    "t_soil" => ("soil_temperature", "K"),
+    "t_sea_ice" => ("sea_ice_temperature", "K"),
+    # vegetation
+    "low_veg_cover" => ("vegetation_cover_low", "1"),
+    "low_veg_lai" => ("leaf_area_index_low", "1"),
+    "low_veg_type" => ("vegetation_type_low", "1"),
+    "high_veg_cover" => ("vegetation_cover_high", "1"),
+    "high_veg_lai" => ("leaf_area_index_high", "1"),
+    "high_veg_type" => ("vegetation_type_high", "1"),
+    # orography
+    "orog" => ("surface_geopotential", "m^2/s^2"),
+    "sdor" => ("orography_subgrid_standard_deviation", "m^2/s^2"),
+    "anor" => ("orography_subgrid_angle", "degrees"),
+    "isor" => ("orography_subgrid_anisotropy", "1"),
+    "slor" => ("orography_subgrid_slope", "m/m"),
+)
+
+"""
+The `scm_in` long name of a variable whose file attributes hold each other's value.
+"""
+const SCM_IN_LONG_NAME = Dict{String, String}("q_skin" => "skin reservoir content")
+
+"""
+Raw names the archive uses for a *different* quantity in more than one file, and the files
+carrying them.
+
+`cfrac` is a `(zt, time)` profile in `profiles.001.nc` and a `(time,)` column series in
+`tmser.001.nc`; `time` is 24 records of 300 s in one and 120 of 60 s in the other. Resolving
+either by name alone returns the wrong array rather than an error, so
+[`variable_product`](@ref) refuses and the caller names the file.
+
+`u`, `v` and `ql` are DALES slab means on 286 LES levels in `profiles.001.nc` and ERA5
+domain averages on 3037–3042 testbed levels in `scm_in`. They are the only three of
+`scm_in`'s 77 names that another file also carries.
+
+`zt` and `zm` are not here: they are the same coordinate in every file that carries them.
+"""
+const AMBIGUOUS_RAW_NAMES = Dict{String, Tuple{Vararg{Symbol}}}(
+    "cfrac" => (:profiles, :tmser),
+    "time" => (:profiles, :mphys, :samptend, :tmser, :scm_in),
+    "u" => (:profiles, :scm_in),
+    "v" => (:profiles, :scm_in),
+    "ql" => (:profiles, :scm_in),
 )
 
 """`mphysprofiles` names that are not tendencies."""
@@ -305,7 +528,7 @@ function samptend_name(raw::AbstractString)
 end
 
 """
-    dales_description(raw) -> String
+    physical_name(raw) -> String
 
 A readable name for any variable the archive carries, or the name unchanged when
 it belongs to no renamed family.
@@ -323,8 +546,22 @@ covered:
 
 An `svNNN` index that is not one of the twelve errors: a raw `sv004` downstream is
 indistinguishable from a variable deliberately left alone.
+
+`file` names the archive file `raw` came from, which only [`TMSER`](@ref) needs: its names
+are irregular and two of them collide with `profiles.001.nc`.
 """
-function dales_description(raw::AbstractString)
+physical_name(raw::AbstractString) =
+    physical_name(raw, variable_product(raw))
+
+function physical_name(raw::AbstractString, file::Symbol)
+    if file === :tmser
+        haskey(TMSER, raw) && return first(TMSER[raw])
+        return String(raw)          # the file's own `time` axis
+    end
+    if file === :scm_in
+        haskey(SCM_IN, raw) || error("`$raw` is not one of the 77 `scm_in` variables")
+        return first(SCM_IN[raw])
+    end
     haskey(BULKMICROSTAT3, raw) && return first(BULKMICROSTAT3[raw])
     m = match(r"^sv(\d{3})$", raw)
     m === nothing || return _sb3_physical(m.captures[1])
@@ -400,15 +637,30 @@ of air density that converts its values.
 
 `ρ_power` is 0 for a relabelling, 1 for a number, 2 for a number variance. A
 number carrying units in no known spelling errors rather than being mislabelled.
-The [`BULKMICROSTAT3`](@ref) group states its own units and needs no conversion —
-its numbers were multiplied by density where they were formed.
+The [`BULKMICROSTAT3`](@ref) and [`TMSER`](@ref) groups state their own units and need no
+conversion — their numbers were multiplied by density where they were formed.
+
+`file` only selects whether [`TMSER`](@ref) is consulted; every other result is the same in
+every file.
 """
 function dales_variable_attributes(
     raw::AbstractString,
     name::AbstractString,
     units::AbstractString,
     long_name::AbstractString,
+    file::Symbol = :profiles,
 )
+    if file === :tmser
+        haskey(TMSER, raw) && return (last(TMSER[raw]), long_name, 0)
+        return (spelled_units(units), String(long_name), 0)
+    end
+    if file === :scm_in
+        return (
+            last(SCM_IN[raw]),
+            get(SCM_IN_LONG_NAME, raw, String(long_name)),
+            0,
+        )
+    end
     haskey(BULKMICROSTAT3, raw) && return (last(BULKMICROSTAT3[raw]), long_name, 0)
     out = String(long_name)
     m = match(r"[Ss]calar (\d{3})", out)
@@ -441,13 +693,29 @@ function spelled_units(units::AbstractString)
     return get(UNIT_SPELLINGS, corrected, corrected)
 end
 
+_archive_path(::Val{:scm_in}, date, root) = scm_in_path(date; root)
 _archive_path(::Val{:profiles}, date, root) = les_profiles_path(date; root)
 _archive_path(::Val{:mphys}, date, root) = mphys_path(date; root)
 _archive_path(::Val{:samptend}, date, root) = samptend_path(date; root)
 _archive_path(::Val{:tmser}, date, root) = tmser_path(date; root)
 
-"""Which archive file a raw variable lives in."""
-function dales_archive_file(raw::AbstractString)
+"""
+    variable_product(raw)
+
+Which archive file a raw variable lives in.
+
+Errors on a name [`AMBIGUOUS_RAW_NAMES`](@ref) carries rather than picking one: resolving
+those by name alone hands back a different quantity, not an error. Pass `file` to
+[`read_variable`](@ref) instead.
+"""
+function variable_product(raw::AbstractString)
+    files = get(AMBIGUOUS_RAW_NAMES, raw, nothing)
+    isnothing(files) || error(
+        "`$raw` is a different quantity in each of $(join(files, ", ")); pass \
+         `file = :$(first(files))` (or another) to say which one.",
+    )
+    haskey(TMSER, raw) && return :tmser
+    haskey(SCM_IN, raw) && return :scm_in
     samptend_name(raw) === nothing || return :samptend
     mphys_name(raw) === nothing || return :mphys
     return :profiles
@@ -463,58 +731,109 @@ function _read_oriented(ds, name)
     return first(NC.dimnames(var)) == "time" ? permutedims(a, (2, 1)) : a
 end
 
+"""`scm_in` level dimension → the variable carrying its heights [m]."""
+const SCM_IN_LEVEL_AXIS =
+    Dict{String, String}("nlev" => "height_f", "nlevp1" => "height_h")
+
+# `scm_in` puts its heights on a variable of their own rather than on the level index, and
+# stores them per time record; the records are bitwise identical on all 190 days.
+function _vertical_axis(ds, file::Symbol, dims, ::Type{T}) where {T}
+    if file === :scm_in
+        for d in dims
+            haskey(SCM_IN_LEVEL_AXIS, d) || continue
+            h = Array(NC.variable(ds, SCM_IN_LEVEL_AXIS[d]))
+            return reverse(vec(view(h, :, 1)))
+        end
+        return T[]
+    end
+    length(dims) < 2 && return T[]
+    vertical = first(dims) == "time" ? dims[2] : first(dims)
+    return haskey(ds, vertical) ? vec(Array(ds[vertical])) : T[]
+end
+
+# The atmospheric levels are stored top-down; the soil levels are not turned around.
+function _ascending_levels(data, file::Symbol, dims)
+    file === :scm_in || return data
+    k = findfirst(d -> haskey(SCM_IN_LEVEL_AXIS, d), collect(dims))
+    return k === nothing ? data : reverse(data; dims = k)
+end
+
 """
-    dales_field(raw, date; root, translate_units)
+    read_variable(raw, date; root, translate_units)
 
-One raw archive variable, as `(; name, z, time, data, units, long_name)`.
+One raw archive variable, as `(; raw, description, z, time, data, units, long_name)`.
 
-`name` is its [`dales_description`](@ref). With `translate_units` the values are
+`description` is its [`physical_name`](@ref). With `translate_units` the values are
 converted to the units [`dales_variable_attributes`](@ref) reports — a number
 becomes per volume — so a caller never handles the archive's mislabelling itself.
 
 A [`BULKMICROSTAT3`](@ref) variable comes back on the times it is an average for,
 which is one record on from where it is stored, so it has one sample fewer than
-the rest of the file and none of them missing.
+the rest of the file and none of them missing. That displacement is a property of
+`profiles.001.nc` alone and is not applied to any other file.
+
+`file` says which archive file to read, and is required for the names
+[`AMBIGUOUS_RAW_NAMES`](@ref) carries: `:scm_in`, `:profiles`, `:tmser`, `:mphys` or
+`:samptend`. `tmser.001.nc` has no vertical axis, so `z` comes back empty for its
+variables, as it does for `scm_in`'s soil levels and its per-time scalars.
+
+An [`SCM_IN`](@ref) variable comes back on an ascending height axis, the file storing its
+atmospheric levels top-down; its soil levels are left as they are. Both of its time records
+are returned.
 """
-function dales_field(
+function read_variable(
     raw::AbstractString,
     date;
     root = data_root(),
+    file::Symbol = variable_product(raw),
     translate_units::Bool = true,
 )
-    file = dales_archive_file(raw)
     path = _archive_path(Val(file), date, root)
     isfile(path) || error("No archive file at $path")
     return NC.NCDataset(path, "r") do ds
-        haskey(ds, raw) || error("`$raw` is not in $path")
-        var = ds[raw]
-        data = _read_oriented(ds, raw)
-        description = dales_description(raw)
-        raw_units = get(var.attrib, "units", "")
-        long_name =
-            get(var.attrib, "longname", get(var.attrib, "long_name", raw))
-        units, long_name, ρ_power =
-            dales_variable_attributes(raw, description, raw_units, long_name)
-        if ρ_power != 0
-            if translate_units
-                ρ = _read_oriented(ds, "rhof")
-                data = data .* ρ .^ ρ_power
-            else
-                # the values were left as the archive holds them, so the units must
-                # say so too rather than reporting the conversion that did not happen
-                units = spelled_units(raw_units)
-            end
-        end
-        vertical = first(NC.dimnames(var)) == "time" ?
-                   NC.dimnames(var)[2] : first(NC.dimnames(var))
-        z = haskey(ds, vertical) ? vec(Array(ds[vertical])) : Float64[]
-        time = Float64.(vec(Array(NC.variable(ds, "time"))))
-        if haskey(BULKMICROSTAT3, raw)
-            data = identity.(data[:, 1:(end - 1)])   # the dropped record was the only fill
-            time = time[2:end]
-        end
-        return (; raw, description, z, time, data, units, long_name)
+        read_variable(ds, raw; file, translate_units)
     end
+end
+
+"""
+    read_variable(ds, raw; file, translate_units)
+
+The same, from an archive file already open, so a caller reading many variables of one
+day opens it once.
+"""
+function read_variable(
+    ds::NC.NCDataset,
+    raw::AbstractString;
+    file::Symbol = variable_product(raw),
+    translate_units::Bool = true,
+)
+    haskey(ds, raw) || error("`$raw` is not in $(NC.path(ds))")
+    var = ds[raw]
+    data = _read_oriented(ds, raw)
+    description = physical_name(raw, file)
+    raw_units = get(var.attrib, "units", "")
+    long_name = get(var.attrib, "longname", get(var.attrib, "long_name", raw))
+    units, long_name, ρ_power =
+        dales_variable_attributes(raw, description, raw_units, long_name, file)
+    if ρ_power != 0
+        if translate_units
+            ρ = _read_oriented(ds, "rhof")
+            data = data .* ρ .^ ρ_power
+        else
+            # the values were left as the archive holds them, so the units must
+            # say so too rather than reporting the conversion that did not happen
+            units = spelled_units(raw_units)
+        end
+    end
+    dims = NC.dimnames(var)
+    data = _ascending_levels(data, file, dims)
+    z = _vertical_axis(ds, file, dims, eltype(data))
+    time = vec(Array(NC.variable(ds, "time")))
+    if file === :profiles && haskey(BULKMICROSTAT3, raw)
+        data = identity.(data[:, 1:(end - 1)])   # the dropped record was the only fill
+        time = time[2:end]
+    end
+    return (; raw, description, z, time, data, units, long_name)
 end
 
 # --- Derived quantities ----------------------------------------------------- #
@@ -528,26 +847,26 @@ Radiative heating rate [K/s] of the reference column, as `(; z, time, data)`, fo
 The archive's `thllwtend`/`thlswtend`/`thltend` are labelled K/s but are **potential**
 temperature tendencies: `modradstat.f90:256` forms each as a face-flux divergence
 over `rhof*exnf*cp*dzf`, so the `exnf` has to be put back to get a temperature
-tendency. Π comes from [`dales_presf`](@ref), the archive's centre pressure being
-absent — using its `presh` instead would add a further 1.5 %.
+tendency. Π comes from [`pressure_from_face`](@ref), the archive's centre pressure being
+absent.
 
 This is the quantity a radiation scheme is judged on, `thltend` being the sum of the
 two bands and `thlradls` a prescribed large-scale term that is separate from both.
 """
-function dales_radiative_heating(date; root = data_root(), band::Symbol = :total)
+function dales_radiative_heating(date; root = data_root(), band::Symbol = :total, backend = DefaultThermodynamicsBackend())
     raw = get(
         Dict(:longwave => "thllwtend", :shortwave => "thlswtend", :total => "thltend"),
         band,
     ) do
         error("No radiative heating for `$band`; try :longwave, :shortwave or :total")
     end
-    f = dales_field(raw, date; root, translate_units = false)
-    presh = dales_field("presh", date; root, translate_units = false)
-    rhof = dales_field("rhof", date; root, translate_units = false)
-    zt = dales_field("zt", date; root, translate_units = false)
-    zm = dales_field("zm", date; root, translate_units = false)
-    p = dales_presf(presh.data, rhof.data, zt.data, zm.data)
-    return (; f.z, f.time, data = f.data .* dales_exner.(p), units = "K s^-1")
+    f = read_variable(raw, date; root, translate_units = false)
+    presh = read_variable("presh", date; root, translate_units = false)
+    rhof = read_variable("rhof", date; root, translate_units = false)
+    zt = read_variable("zt", date; root, translate_units = false)
+    zm = read_variable("zm", date; root, translate_units = false)
+    p = pressure_from_face(presh.data, rhof.data, zt.data, zm.data; backend)
+    return (; f.z, f.time, data = f.data .* exner.(backend, p), units = "K s^-1")
 end
 
 """
@@ -576,8 +895,8 @@ function dales_fall_speed(
     )
     haskey(raw_rate, species) ||
         error("No fall speed for `$species`; try :ice, :snow, :rain or :graupel")
-    rate = dales_field(raw_rate[species], date; root, translate_units = false)
-    q = dales_field(raw_mass[species], date; root, translate_units = false).data
+    rate = read_variable(raw_rate[species], date; root, translate_units = false)
+    q = read_variable(raw_mass[species], date; root, translate_units = false).data
     return (;
         rate.z, rate.time,
         data = ifelse.(q .> q_min, rate.data ./ q, NaN),
@@ -593,13 +912,12 @@ kinematic fluxes.
 
 `wthls` and `wqts` are the subfilter θ_l and total-water fluxes at the lowest
 face, so the energy fluxes are `ρ c_p wθ_l` and `ρ L_v wq_t`. DALES computes these
-itself at `isurf = 2`; `scm_in`'s `sfc_*_flx` are netCDF fill and are not them
-(`docs/design.md` section 10).
+itself at `isurf = 2`; `scm_in`'s `sfc_*_flx` are netCDF fill and are not them.
 """
 function surface_heat_fluxes(date; root = data_root())
-    ρ = dales_field("rhof", date; root, translate_units = false).data[1, :]
-    wθ = dales_field("wthls", date; root, translate_units = false)
-    wq = dales_field("wqts", date; root, translate_units = false).data[1, :]
+    ρ = read_variable("rhof", date; root, translate_units = false).data[1, :]
+    wθ = read_variable("wthls", date; root, translate_units = false)
+    wq = read_variable("wqts", date; root, translate_units = false).data[1, :]
     return (;
         wθ.time,
         hfss = ρ .* DALES_CONSTANTS.cp_d .* wθ.data[1, :],
@@ -616,7 +934,7 @@ A water path is a *derived* quantity on both sides of a comparison, never a stor
 one: the reference's own bars were integrated by DALES over its 286 levels with
 its `ρ` and `Δz`, a model's `lwp` over the model's levels, so
 differencing them mixes a physical difference with an integration one. Build both
-with this, from profiles on one grid (`docs/design.md` section 12).
+with this, from profiles on one grid.
 """
 function column_water_path(q::AbstractMatrix, ρ::AbstractMatrix, faces::AbstractVector)
     nz = size(q, 1)

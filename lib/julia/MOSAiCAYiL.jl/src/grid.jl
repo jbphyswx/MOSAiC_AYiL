@@ -2,8 +2,8 @@
     grid.jl
 
 PRODUCTION and TEST horizontal grids, the stored DALES vertical faces, a formula
-constructor that is *not* bit-identical in the stretch, and face helpers that do
-not need ClimaCore.
+constructor that is *not* bit-identical in the stretch, and helpers for cutting and
+thinning a face vector.
 """
 
 """
@@ -99,17 +99,19 @@ const LES_Z_CENTRE_BOTTOM = 5.0f0
 const LES_Z_CENTRE_TOP = 11857.228f0
 
 """
-    stretch_dz(; kT, s, ΔzStart, kM, ΔzEnd, nz)
+    stretch_dz([FT = Float64]; kT, s, ΔzStart, kM, ΔzEnd, nz)
 
 Cell thicknesses [m] from paper Appendix A / `modglobal.f90`: `Δz = 10 m` for
 `k ≤ kT`, then `10·(1+s)^(k−kT−1)`, then `ΔzEnd` for `k ≥ kM`.
 """
-function stretch_dz(;
+function stretch_dz(
+    ::Type{FT} = Float64
+    ;
     kT::Int = STRETCH.kT,
-    s::Real = STRETCH.s,
-    ΔzStart::FT = STRETCH.ΔzStart,
+    s::FT = FT(STRETCH.s),
+    ΔzStart::FT = FT(STRETCH.ΔzStart),
     kM::Int = STRETCH.kM,
-    ΔzEnd::FT = STRETCH.ΔzEnd,
+    ΔzEnd::FT = FT(STRETCH.ΔzEnd),
     nz::Int = STRETCH.nz,
 ) where {FT}
     dz = Vector{FT}(undef, nz)
@@ -126,22 +128,22 @@ function stretch_dz(;
 end
 
 """
-    stretch_centres(; kwargs...)
+    stretch_centres([FT = Float64]; kwargs...)
 
 Cell-centre heights [m] from [`stretch_dz`](@ref). First centre is `Δz[1]/2`.
 """
-function stretch_centres(; kwargs...)
-    dz = stretch_dz(; kwargs...)
+function stretch_centres(::Type{FT} = Float64; kwargs...) where {FT}
+    dz = stretch_dz(FT; kwargs...)
     zt = similar(dz)
-    zt[1] = dz[1] / 2
+    zt[1] = dz[1] / FT(2)
     for k in 2:length(dz)
-        zt[k] = zt[k - 1] + (dz[k - 1] + dz[k]) / 2
+        zt[k] = zt[k - 1] + (dz[k - 1] + dz[k]) / FT(2)
     end
     return zt
 end
 
 """
-    stretch_faces(; kwargs...)
+    stretch_faces([FT = Float64]; kwargs...)
 
 Cell faces [m] from the formula centres via `zh(1)=0`, `zh(k+1)=2·zt(k)−zh(k)`.
 
@@ -149,8 +151,8 @@ Not bit-identical to [`LES_FACES`](@ref) in the stretch and in the
 alternating-thickness region of the 185 m layers. Use [`LES_FACES`](@ref) as the
 production grid.
 """
-function stretch_faces(; kwargs...)
-    zt = stretch_centres(; kwargs...)
+function stretch_faces(::Type{FT} = Float64; kwargs...) where {FT}
+    zt = stretch_centres(FT; kwargs...)
     zh = Vector{eltype(zt)}(undef, length(zt) + 1)
     zh[1] = zero(eltype(zt))
     for k in 1:length(zt)
@@ -217,3 +219,118 @@ native_faces(::MOSAiCAYiLCase) = LES_FACES
 
 """Domain top [m]: the top face of the DALES grid."""
 z_max(::MOSAiCAYiLCase) = LES_TOP_FACE
+
+# --- Hydrostatic column ----------------------------------------------------- #
+
+"""
+    pressure_from_face(p_face, ρ, z_center, z_face; backend)
+
+Cell-centre pressure [Pa], which the archive does not carry, as one hydrostatic step up from
+the face below.
+
+`profiles.001.nc`'s `presh` is DALES's **half**-level pressure, not centre. 
+
+Use this when a face pressure is what you have; [`pressure_fromztop`](@ref) is the other
+route, DALES's own bottom-up integration from `ps`, which needs the whole column.
+"""
+function pressure_from_face(
+    p_face, ρ, z_center, z_face; backend = DefaultThermodynamicsBackend(),
+)
+    FT = float(
+        promote_type(
+            nonmissingtype(eltype(p_face)), nonmissingtype(eltype(ρ)),
+            nonmissingtype(eltype(z_center)), nonmissingtype(eltype(z_face)),
+        ),
+    )
+    g = grav(backend, FT)
+    return @. p_face - ρ * g * (z_center - z_face)
+end
+
+"""
+    vertical_metrics(zf) -> (; zf, dzf, dzh)
+
+DALES's full-level metrics from the `kmax` full-level heights (`modglobal.f90` `initglobal`).
+
+Half levels come from `zh[k+1] = zh[k] + 2(zf[k] − zh[k])` with `zh[1] = 0`; the returned
+`zf` is extended by one level so it is `k1 = kmax + 1` long, matching the Fortran.
+"""
+function vertical_metrics(zf_in::AbstractVector{FT}) where {FT}
+    kmax = length(zf_in)
+    kmax >= 1 || error("zf must have at least one level")
+    zh = zeros(FT, kmax + 1)
+    for k in 1:kmax
+        zh[k + 1] = zh[k] + 2 * (zf_in[k] - zh[k])
+    end
+    zf = Vector{FT}(undef, kmax + 1)
+    zf[1:kmax] .= zf_in
+    zf[kmax + 1] = zf_in[kmax] + 2 * (zh[kmax + 1] - zf_in[kmax])
+    dzf = Vector{FT}(undef, kmax + 1)
+    for k in 1:kmax
+        dzf[k] = zh[k + 1] - zh[k]
+    end
+    dzf[kmax + 1] = dzf[kmax]
+    dzh = Vector{FT}(undef, kmax + 1)
+    dzh[1] = 2 * zf[1]
+    for k in 2:(kmax + 1)
+        dzh[k] = zf[k] - zf[k - 1]
+    end
+    return (; zf, dzf, dzh)
+end
+
+"""
+    pressure_fromztop(ps, θ, q_tot, q_liq, zf; backend) -> (; presf, presh)
+
+Hydrostatic pressure [Pa] on the full and half levels, integrated upward from `ps` — a port
+of DALES's `fromztop` (`modthermodynamics.f90:321-384`), which is how the archive's pressure
+was formed.
+
+`θ` is the **dry** potential temperature on the full levels, DALES's `th0av`, which it forms
+from the liquid-ice one as `θ = θ_l + (L_v/c_p) q_l / Π` (`:263`). Passing `θ_l` instead is
+wrong wherever there is liquid. `q_tot` and `q_liq` are the domain means beside it, and `zf`
+is the full-level height array [`vertical_metrics`](@ref) is built from.
+
+The two are different quantities and neither substitutes for the other: `presf` steps
+through half-level `θ_v` over `dzh`, while `presh` starts at `ps` and steps through
+full-level `θ_v` over `dzf`. The archive's stored `presh` is the half-level one despite
+sitting on `zt`
+"""
+function pressure_fromztop(
+    ps::FT,
+    θ::AbstractVector{FT},
+    q_tot::AbstractVector{FT},
+    q_liq::AbstractVector{FT},
+    zf_in::AbstractVector{FT};
+    backend = DefaultThermodynamicsBackend(),
+) where {FT}
+    k1 = length(θ)
+    (length(q_tot) == k1 && length(q_liq) == k1) || error(
+        "θ, q_tot and q_liq must have the same length; got $k1, $(length(q_tot)), \
+         $(length(q_liq)).",
+    )
+    (; zf, dzf, dzh) = vertical_metrics(zf_in)
+    length(zf) >= k1 || error("zf gives $(length(zf)) levels for $k1 profile levels.")
+
+    κ = R_d(backend, FT) / cp_d(backend, FT)
+    g = grav(backend, FT)
+    cp = cp_d(backend, FT)
+    p0 = p_ref(backend, FT)
+    rvord = R_v(backend, FT) / R_d(backend, FT)
+    θ_v(k) = θ[k] * (one(FT) + (rvord - one(FT)) * q_tot[k] - rvord * q_liq[k])
+
+    presf = Vector{FT}(undef, k1)
+    presf[1] = (ps^κ - g * (p0^κ) * zf[1] / (cp * θ_v(1)))^(one(FT) / κ)
+    for k in 2:k1
+        θh = (θ[k] * dzf[k - 1] + θ[k - 1] * dzf[k]) / (2 * dzh[k])
+        qth = (q_tot[k] * dzf[k - 1] + q_tot[k - 1] * dzf[k]) / (2 * dzh[k])
+        qlh = (q_liq[k] * dzf[k - 1] + q_liq[k - 1] * dzf[k]) / (2 * dzh[k])
+        thvh = θh * (one(FT) + (rvord - one(FT)) * qth - rvord * qlh)
+        presf[k] = (presf[k - 1]^κ - g * (p0^κ) * dzh[k] / (cp * thvh))^(one(FT) / κ)
+    end
+
+    presh = Vector{FT}(undef, k1)
+    presh[1] = ps
+    for k in 2:k1
+        presh[k] = (presh[k - 1]^κ - g * (p0^κ) * dzf[k - 1] / (cp * θ_v(k - 1)))^(one(FT) / κ)
+    end
+    return (; presf, presh)
+end

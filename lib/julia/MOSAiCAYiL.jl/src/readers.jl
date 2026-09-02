@@ -17,12 +17,15 @@ _is_fill(v::Float64) = v === NC_FILL_DOUBLE
 _is_fill(::Any) = false
 
 """
-    read_scm_in(date; root, time_index)
+    testbed_forcing(date; root, time_index)
 
-The ERA5 testbed forcing for one AYiL day, on an ascending height axis.
+The ERA5 testbed forcing for one AYiL day, on an ascending height axis: the state
+profiles, the large-scale advective tendencies, the geostrophic wind and the surface
+conditions the day was run with.
 
-`scm_in` stores its levels top-down from about 85 km — 3037 to 3042 of them,
-depending on the day — so every profile is reversed here.
+`scm_in` stores its levels top-down from about 85 km — 3037 to 3042 of them, depending
+on the day — so every profile is turned around here, by [`read_variable`](@ref), which
+also reaches the rest of [`SCM_IN`](@ref) under the raw names.
 
 `time_index` selects which time record to read. Each file is a single 05:00–11:00
 UTC composite average written twice, and the two records are bitwise identical on
@@ -32,18 +35,19 @@ every shipped day.
 (`modtestbed.f90:739-741`): vapour-only `T_v = T(1 + 0.61 q)`, DALES `R_d` and `g`.
 Surface fluxes that are netCDF fill become `missing`.
 """
-function read_scm_in(date; root = data_root(), time_index::Int = 1)
+function testbed_forcing(date; root = data_root(), time_index::Int = 1)
     path = scm_in_path(date; root)
     isfile(path) || error("No testbed forcing at $path")
     return NC.NCDataset(path, "r") do ds
-        prof(name) = reverse(Array(ds[name])[:, time_index])
-        scalar(name) = Array(ds[name])[time_index]
+        column(name) = read_variable(ds, name; file = :scm_in).data
+        prof(name) = column(name)[:, time_index]
+        scalar(name) = column(name)[time_index]
         function optional(name)
             v = scalar(name)
             return _is_fill(v) ? missing : v
         end
 
-        z = reverse(Array(ds["height_f"])[:, time_index])
+        z = prof("height_f")
 
         ta = prof("t_local")
         q = prof("q_local")
@@ -101,26 +105,22 @@ function read_scm_in(date; root = data_root(), time_index::Int = 1)
     end
 end
 
-read_scm_in(c::MOSAiCAYiLCase; kwargs...) = read_scm_in(date_string(c); kwargs...)
+testbed_forcing(c::MOSAiCAYiLCase; kwargs...) = testbed_forcing(date_string(c); kwargs...)
 
 """
     scm_in_air_density(forcing)
 
 Air density [kg/m³] from `scm_in` `pressure_f`, `t_local`, and `(q, ql, qi)` —
-one mutually consistent ERA5 column (design.md §8). Does not hydrostatically
-integrate from `ps`.
+one mutually consistent ERA5 column. Does not hydrostatically integrate from `ps`:
+`ps` and `pressure_f` are separate ERA5 fields and are not mutually hydrostatic
 
 `T_v = T (1 + (R_v/R_d − 1) q − ql − qi)` with specific humidities; `ρ = p / (R_d T_v)`.
+The condensate is the file's own `(ql, qi)`, so nothing is re-diagnosed from saturation.
 Returns `(z, ρ)`. Never use `rhobf` as air density.
 """
-function scm_in_air_density(forcing; R_d = DALES_CONSTANTS.R_d, R_v = DALES_CONSTANTS.R_v)
-    R_d = oftype(float(forcing.ta[1]), R_d)
-    R_v = oftype(float(forcing.ta[1]), R_v)
-    T_v =
-        forcing.ta .* (
-            1 .+ (R_v / R_d - 1) .* forcing.q .- forcing.ql .- forcing.qi
-        )
-    ρ = forcing.p ./ (R_d .* T_v)
+function scm_in_air_density(forcing; backend = DefaultThermodynamicsBackend())
+    q_tot = forcing.q .+ forcing.ql .+ forcing.qi
+    ρ = air_density.(backend, forcing.ta, forcing.p, q_tot, forcing.ql, forcing.qi)
     return (forcing.z, ρ)
 end
 

@@ -3,12 +3,16 @@
 
 Serialization of the testbed forcing one AYiL day is built from.
 
-[`write_forcing_file`](@ref) writes exactly what [`read_scm_in`](@ref) returns and
+[`write_forcing_file`](@ref) writes exactly what [`testbed_forcing`](@ref) returns and
 [`read_forcing_file`](@ref) reads it back in the same shape. Missing surface
 fluxes are omitted from the file.
 """
 
-"""Profile fields of a forcing object, with the units they are written in."""
+"""
+Profile fields of a forcing object, with the units they are written in.
+
+The package's own spellings, as [`SCM_IN`](@ref) gives them
+"""
 const FORCING_PROFILE_UNITS = (;
     z = "m",
     ta = "K",
@@ -20,12 +24,12 @@ const FORCING_PROFILE_UNITS = (;
     va = "m/s",
     p = "Pa",
     o3 = "kg/kg",
-    n_ccn = "/m3",
+    n_ccn = "m^-3",
     wa = "m/s",
     tntha = "K/s",
     tnhusha = "kg/kg/s",
-    tnua = "m/s2",
-    tnva = "m/s2",
+    tnua = "m/s^2",
+    tnva = "m/s^2",
     ug = "m/s",
     vg = "m/s",
 )
@@ -33,27 +37,27 @@ const FORCING_PROFILE_UNITS = (;
 """Surface fields of a forcing object, with the units they are written in."""
 const FORCING_SURFACE_UNITS = (;
     ps = "Pa",
-    trajectory_latitude = "degrees North",
-    trajectory_longitude = "degrees East",
-    albedo = "0-1",
-    albedo_snow = "0-1",
-    snow = "m, liquid equivalent",
+    trajectory_latitude = "degrees_north",
+    trajectory_longitude = "degrees_east",
+    albedo = "1",
+    albedo_snow = "1",
+    snow = "m",
     z0_momentum = "m",
     z0_heat = "m",
-    sea_ice_fraction = "0-1",
+    sea_ice_fraction = "1",
     t_skin = "K",
     t_skin_ocean = "K",
     t_skin_seaice = "K",
     open_sst = "K",
-    land_sea_mask = "-",
-    sensible_heat_flux = "W/m2",
-    latent_heat_flux = "W/m2",
+    land_sea_mask = "1",
+    sensible_heat_flux = "W/m^2",
+    latent_heat_flux = "W/m^2",
 )
 
 """
     write_forcing_file(path, forcing; date, nudging)
 
-Write `forcing` — a [`read_scm_in`](@ref) result — to `path`, returning it.
+Write `forcing` — a [`testbed_forcing`](@ref) result — to `path`, returning it.
 
 `nudging` is stored alongside so the file reconstructs a forcing without the namelist.
 A surface field that is `missing` in `forcing` is left out of the file entirely.
@@ -99,7 +103,7 @@ write_forcing_file(
     time_index::Int = 1,
 ) = write_forcing_file(
     path,
-    read_scm_in(c; root, time_index);
+    testbed_forcing(c; root, time_index);
     date = date_string(c),
     nudging = nudging_parameters(c),
 )
@@ -108,7 +112,7 @@ write_forcing_file(
     read_forcing_file(path)
 
 A forcing object from a file written by [`write_forcing_file`](@ref), shaped as
-[`read_scm_in`](@ref) returns plus the `nudging` the file carries.
+[`testbed_forcing`](@ref) returns plus the `nudging` the file carries.
 """
 function read_forcing_file(path::AbstractString)
     isfile(path) || error("No MOSAiC forcing file at $path")

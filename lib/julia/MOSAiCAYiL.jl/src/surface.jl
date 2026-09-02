@@ -26,28 +26,8 @@ surface_temperature(forcing) = surface_temperature(
     forcing.surface.t_skin_seaice,
 )
 
-"""Tetens/Murray saturation vapour pressure [Pa] over liquid (DALES `at`, `bt`)."""
-function esat_liquid(T::FT; 
-    e_s0::FT = FT(DALES_CONSTANTS.e_s0), 
-    a::FT = FT(DALES_CONSTANTS.a_liquid),
-    b::FT = FT(DALES_CONSTANTS.b_liquid), 
-    T_melt::FT = FT(DALES_CONSTANTS.T_melt)
-) where {FT}
-    return e_s0 * exp(a * (T - T_melt) / (T - b))
-end
-
-"""Tetens/Murray saturation vapour pressure [Pa] over ice (DALES `at_i`, `bt_i`)."""
-function esat_ice(T::FT; 
-    e_s0::FT = FT(DALES_CONSTANTS.e_s0), 
-    a::FT = FT(DALES_CONSTANTS.a_ice),
-    b::FT = FT(DALES_CONSTANTS.b_ice), 
-    T_melt::FT = FT(DALES_CONSTANTS.T_melt)
-) where {FT}
-    return e_s0 * exp(a * (T - T_melt) / (T - b))
-end
-
 """
-    qseaicefrctsurf(f, T_ocean, T_seaice, ps)
+    qseaicefrctsurf(f, T_ocean, T_seaice, ps; backend, T_melt)
 
 Surface saturation specific humidity from AYiL `qseaicefrctsurf`
 (`modsurface.f90:1304-1319`):
@@ -57,24 +37,32 @@ e_s = f · e_sat,ice(T_seaice) + (1 − f) · e_sat,liq(T_ocean)
 q_sat = (R_d / R_v) · e_s / p_s
 ```
 
-`e_sat,ice` is used only when `T_seaice < T_melt`, otherwise the liquid formula.
-With `rs = 0` the surface is saturated, so this *is* `q_skin`.
+The vapour pressures are Tetens/Murray, which is what `modsurface.f90` uses at every one of
+its saturation sites — not the Murphy–Koop form the interior thermodynamics uses. The
+`(R_d/R_v)·e_s/p_s` is likewise the surface convention, dropping the `(1−ε)e` term the
+interior keeps.
+
+`e_sat,ice` is used only when `T_seaice < T_melt`, otherwise the liquid formula. With
+`rs = 0` the surface is saturated, so this *is* `q_skin`.
 
 This is not `q_sat` of the blended temperature: `e_s` is exponential in `T`.
 """
-function qseaicefrctsurf(f::FT, T_ocean::FT, T_seaice::FT, ps::FT; T_melt::FT = FT(DALES_CONSTANTS.T_melt)) where {FT}
-    esi = T_seaice > T_melt ? esat_liquid(T_seaice) : esat_ice(T_seaice)
-    esw = esat_liquid(T_ocean)
+function qseaicefrctsurf(
+    f::FT, T_ocean::FT, T_seaice::FT, ps::FT;
+    backend = DefaultThermodynamicsBackend(), T_melt::FT = T_freeze(backend, FT),
+) where {FT}
+    esi = tetens_saturation_vapor_pressure(
+        backend, T_seaice, T_seaice > T_melt ? Liquid() : Ice(); T_melt,
+    )
+    esw = tetens_saturation_vapor_pressure(backend, T_ocean, Liquid(); T_melt)
     es = f * esi + (one(FT) - f) * esw
-    return (FT(DALES_CONSTANTS.R_d) / FT(DALES_CONSTANTS.R_v)) * es / ps
+    return surface_q_vap_saturation(backend, es, ps)
 end
 
-function qseaicefrctsurf(forcing; T_melt = DALES_CONSTANTS.T_melt)
-    return qseaicefrctsurf(
-        forcing.surface.sea_ice_fraction,
-        forcing.surface.t_skin_ocean,
-        forcing.surface.t_skin_seaice,
-        forcing.surface.ps;
-        T_melt,
-    )
-end
+qseaicefrctsurf(forcing; backend = DefaultThermodynamicsBackend()) = qseaicefrctsurf(
+    forcing.surface.sea_ice_fraction,
+    forcing.surface.t_skin_ocean,
+    forcing.surface.t_skin_seaice,
+    forcing.surface.ps;
+    backend,
+)

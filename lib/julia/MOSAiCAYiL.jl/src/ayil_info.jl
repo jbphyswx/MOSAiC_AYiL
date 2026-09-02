@@ -7,8 +7,8 @@ column. Days absent from the table error on [`best_simulation_top`](@ref).
 """
 
 """
-Filter-output centres [m] before snapping to a face. Copied from ClimaSimulations
-`ayil_info.jl`; regenerate with [`best_z_maxs`](@ref) in `ice_filters.jl`.
+Filter-output centres [m] before snapping to a face. Regenerate with
+[`best_z_maxs`](@ref) in `ice_filters.jl`.
 """
 const RAW_BEST_SIMULATION_TOP_C = Dict{String, Float64}(
     "20200419" => 4517.39,
@@ -95,10 +95,9 @@ const RAW_BEST_SIMULATION_TOP_F = Dict{String, Float64}(
 )
 
 """
-Hand-collapsed domain tops [m]: 2500, 5000, or the full column.
+Hand-collapsed domain tops [m] for the 76 days with comparable reference ice.
 
-19 days are cut to 2500 or 5000 m; the rest of the table run the full column.
-Days not in this table have no comparable reference ice.
+19 days are hand-set to 2500 m (12) or 5000 m (7) and 52 run the full column. 
 """
 const BEST_SIMULATION_TOP_F = let
     d = Dict{String, Float64}(RAW_BEST_SIMULATION_TOP_F)
