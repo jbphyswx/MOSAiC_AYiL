@@ -74,6 +74,74 @@ Test.@testset "the tabulated inversion is the one the package computes" begin
     Test.@test MA.inversion_height(date) == live
 end
 
+Test.@testset "the surface stitches onto the column" begin
+    c = MA.case("20200503")
+    f = MA.testbed_forcing(c)
+    s = MA.surface_state(f)
+
+    Test.@test s.z == 0
+    Test.@test s.p == f.surface.ps
+    Test.@test s.ta == MA.surface_temperature(f)
+    Test.@test s.q == s.hus == MA.qseaicefrctsurf(f)
+    Test.@test s.ql == s.qi == s.ua == s.va == s.wa == 0
+    Test.@test eltype(f.ta) === typeof(s.ta)
+
+    g = MA.forcing_with_surface(f)
+    Test.@test length(g.z) == length(f.z) + 1
+    Test.@test first(g.z) == 0
+    Test.@test issorted(g.z)
+    Test.@test g.z[2:end] == f.z
+    for name in (:ta, :hus, :q, :ql, :qi, :ua, :va, :p, :wa)
+        Test.@test getproperty(g, name)[1] == getproperty(s, name)
+        Test.@test getproperty(g, name)[2:end] == getproperty(f, name)
+    end
+    # the terms with no surface value hold the lowest level
+    for name in (:o3, :n_ccn, :tntha, :tnhusha, :tnua, :tnva, :ug, :vg)
+        Test.@test getproperty(g, name)[1] == first(getproperty(f, name))
+        Test.@test getproperty(g, name)[2:end] == getproperty(f, name)
+    end
+    Test.@test g.surface === f.surface
+
+    # `ps` is the LES column's own surface pressure, not a second one
+    presh = MA.read_variable("presh", c; file = :profiles, translate_units = false)
+    Test.@test presh.data[1, 1] == f.surface.ps
+
+    # the skin-to-air step is a surface layer, not a smooth continuation
+    Test.@test s.ta != f.ta[1]
+end
+
+Test.@testset "interpolating the forcing onto a grid" begin
+    f = MA.testbed_forcing("20200503")
+
+    # exact at the source levels
+    same = MA.interpolate_forcing(f, f.z)
+    Test.@test same.z == f.z
+    for name in (:ta, :q, :ua, :p, :ug)
+        Test.@test getproperty(same, name) ≈ getproperty(f, name)
+    end
+
+    # linear between them: the midpoint of a cell is the mean of its ends
+    k = 100
+    zmid = (f.z[k] + f.z[k + 1]) / 2
+    mid = MA.interpolate_forcing(f, [zmid])
+    Test.@test mid.ta[1] ≈ (f.ta[k] + f.ta[k + 1]) / 2
+    Test.@test mid.q[1] ≈ (f.q[k] + f.q[k + 1]) / 2
+
+    # onto the LES grid, which starts at 5 m — inside the ERA5 column
+    les = MA.interpolate_forcing(f, Float64.(MA.stretch_centres()))
+    Test.@test length(les.z) == 286
+    Test.@test all(isfinite, les.ta)
+    Test.@test issorted(les.z)
+    Test.@test minimum(les.ta) > 150 && maximum(les.ta) < 350
+
+    # below the lowest ERA5 level it extrapolates the air, as DALES's unclamped `fac` does
+    below = MA.interpolate_forcing(f, [0.0])
+    Test.@test isfinite(below.ta[1])
+    Test.@test below.ta[1] != MA.surface_state(f).ta   # the air, not the skin
+
+    Test.@test f.surface === les.surface
+end
+
 Test.@testset "day scalars vs scm_in" begin
     c = MA.case("20200503")
     fd = MA.testbed_forcing(c)

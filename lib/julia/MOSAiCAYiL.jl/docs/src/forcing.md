@@ -56,6 +56,57 @@ MA.read_variable("t_soil", "20200503"; file = :scm_in)
 record what the file itself gets wrong: `q_skin` carries its units and its long name in each
 other's attribute, and `sv` is labelled `whatever`.
 
+## The surface, and getting onto your own grid
+
+ERA5's column starts at **2 m**; DALES's grid starts at 5 m. Nothing defines *air* at
+`z = 0`. What exists at the ground is the **skin**, a separate field:
+
+```julia
+MA.surface_temperature(f)   # the skin, (1-f) T_ocean + f T_seaice
+MA.qseaicefrctsurf(f)       # its saturation humidity
+f.surface.ps
+f.surface.z0_momentum, f.surface.z0_heat
+```
+
+`scm_in` also carries `t_soil` and `t_sea_ice` on
+four levels, but those are interior fields, unused at `isurf = 2`.
+
+[`MOSAiCAYiL.surface_state`](@ref) packages the ground values under the same field names, and
+[`MOSAiCAYiL.forcing_with_surface`](@ref) prepends them so a profile runs 0 → top in one
+array. Index 1 is then the skin and 2 onward the air. On 20200503:
+
+| z | | T | q |
+|---|---|---|---|
+| 0 m | surface (skin) | 258.775 K | 1.076e-3 |
+| 1 m | air, extrapolated | 257.983 K | 9.556e-4 |
+| 2 m | air, ERA5's lowest level | 257.922 K | 9.511e-4 |
+| 5 m | air, DALES's first level | 257.738 K | 9.377e-4 |
+
+Put the forcing on your own levels the way DALES did — linearly in height:
+
+```julia
+MA.interpolate_forcing(f, z)          # any ascending z, in metres
+```
+
+Below 2 m or above the top it extrapolates the two nearest levels, which is what DALES's own
+unclamped weight gives.
+
+### Where the flux comes from
+
+The skin-to-air step is the surface layer, and it is what drives the fluxes. AYiL runs
+`isurf = 2`: the skin is **prescribed** from observations and the fluxes are **computed**
+(`scm_in`'s `sfc_sens_flx`/`sfc_lat_flx` are netCDF fill on all 190 days, read back as
+`missing`).
+
+```
+thlflux = -(thl0(1) - tskin) / ra                                modsurface.f90:935
+ra      = 1 / (Cs |U(z₁)|)                                                    :867
+Cs      = κ² / {[ln(z₁/z0m) - ψm(...)] · [ln(z₁/z0h) - ψh(...)]}          :858-860
+```
+
+Every term is evaluated at the **model's own first level** `z₁` — 5 m in DALES. The 2 m
+level plays no part: it is where the data starts, not where the flux is defined.
+
 ## Air density
 
 ```julia

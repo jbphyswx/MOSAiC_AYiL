@@ -251,6 +251,9 @@ b_ice
 ```@docs
 surface_temperature
 qseaicefrctsurf
+surface_state
+forcing_with_surface
+interpolate_forcing
 ```
 
 ## The grid

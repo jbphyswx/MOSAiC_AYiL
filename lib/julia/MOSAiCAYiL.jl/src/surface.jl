@@ -66,3 +66,74 @@ qseaicefrctsurf(forcing; backend = DefaultThermodynamicsBackend()) = qseaicefrct
     forcing.surface.ps;
     backend,
 )
+
+"""
+    surface_state(forcing; backend)
+
+The surface boundary condition of a day at `z = 0`, under the names
+[`testbed_forcing`](@ref) uses: `ta` the skin temperature
+([`surface_temperature`](@ref)), `q` and `hus` its saturation humidity
+([`qseaicefrctsurf`](@ref)), `p` the surface pressure `ps`, and zero wind and condensate.
+
+This is a surface, not the air continued downward. `ps` is also the LES column's surface pressure:
+`profiles.001.nc` `presh[1]` equals it bit-for-bit on 190/190 days
+(`modthermodynamics.f90:372`).
+"""
+function surface_state(forcing; backend = DefaultThermodynamicsBackend())
+    FT = eltype(forcing.ta)
+    q_s = FT(qseaicefrctsurf(forcing; backend))
+    return (;
+        z = zero(FT),
+        ta = FT(surface_temperature(forcing)),
+        hus = q_s,
+        q = q_s,
+        ql = zero(FT),
+        qi = zero(FT),
+        ua = zero(FT),
+        va = zero(FT),
+        p = FT(forcing.surface.ps),
+        wa = zero(FT),
+    )
+end
+
+"""
+    forcing_with_surface(forcing; backend)
+
+A day's forcing with [`surface_state`](@ref) prepended, so every profile runs from the
+ground to the top of the ERA5 column in one array.
+
+Index 1 is the skin and indices 2 onward are the air, which are different quantities.
+To drive a model, interpolate the
+air with [`interpolate_forcing`](@ref) and pass [`surface_state`](@ref) to its surface
+scheme.
+
+`o3`, `n_ccn` and the large-scale terms (`tntha`, `tnhusha`, `tnua`, `tnva`, `ug`, `vg`)
+hold the lowest level. `p` at the ground is `ps`, which sits below ERA5's `pressure_f` at
+2 m on 92 of the 190 days, those being separate ERA5 products.
+"""
+function forcing_with_surface(forcing; kwargs...)
+    s = surface_state(forcing; kwargs...)
+    from_ground(field, value) = vcat(value, field)
+    held(field) = vcat(first(field), field)
+    return (;
+        z = from_ground(forcing.z, s.z),
+        ta = from_ground(forcing.ta, s.ta),
+        hus = from_ground(forcing.hus, s.hus),
+        q = from_ground(forcing.q, s.q),
+        ql = from_ground(forcing.ql, s.ql),
+        qi = from_ground(forcing.qi, s.qi),
+        ua = from_ground(forcing.ua, s.ua),
+        va = from_ground(forcing.va, s.va),
+        p = from_ground(forcing.p, s.p),
+        o3 = held(forcing.o3),
+        n_ccn = held(forcing.n_ccn),
+        wa = from_ground(forcing.wa, s.wa),
+        tntha = held(forcing.tntha),
+        tnhusha = held(forcing.tnhusha),
+        tnua = held(forcing.tnua),
+        tnva = held(forcing.tnva),
+        ug = held(forcing.ug),
+        vg = held(forcing.vg),
+        forcing.surface,
+    )
+end
