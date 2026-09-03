@@ -7,6 +7,13 @@ This package owns the **data** and **facts** of the ensemble, plus ClimaAtmos
 methods on types it defines. It does not assemble an `AtmosModel` /
 `AtmosSimulation` and does not call `solve_atmos!`.
 
+Full documentation: [`docs/src`](docs/src) — [reading](docs/src/reading.md),
+[the forcing](docs/src/forcing.md), [the 3D fields](docs/src/fields3d.md),
+[thermodynamics](docs/src/thermodynamics.md),
+[what the reference runs did](docs/src/archive.md).
+
+![Inversion height and cloud top over the MOSAiC drift](docs/src/assets/catalog.png)
+
 ## Julia version
 
 Use the machine default `julia` (currently 1.12.x here). Compat is
@@ -38,6 +45,21 @@ Regenerate the committed day-scalar table with:
 ```bash
 julia --project=gen -e 'include("gen/extract_day_scalars.jl"); write_day_scalars()'
 # a local tree: write_day_scalars(; root = "/path/to/ayil_config_input_results")
+```
+
+## Facts with no I/O
+
+Per-day numbers are committed tables, looked up by date — no artifact, no network, no file
+handle. This is the figure above.
+
+```julia
+c = MOSAiCAYiL.case("20200503")
+MOSAiCAYiL.latitude(c)          # 82.38144
+MOSAiCAYiL.t_skin(c)            # 258.77515
+MOSAiCAYiL.scm_in_levels(c)     # 3040 — a property of the day, 3037 to 3042
+MOSAiCAYiL.inversion_height(c)  # 705.0
+MOSAiCAYiL.cloud_top(c)
+MOSAiCAYiL.day_scalars(c), MOSAiCAYiL.day_metadata(c)
 ```
 
 ## Reading
@@ -89,6 +111,20 @@ z = MOSAiCAYiL.open_zarr("day.zarr")
 `chunks` has no default. Zarr decompresses a whole chunk to read any element of it, and
 reading one horizontal level and reading one column want opposite shapes.
 
+## The grid and the physics
+
+Every day ran on the same 287 faces. [`LES_FACES`](src/grid.jl) is the file's own `Float32`
+values; `truncate_faces_to_top` and `coarsen_faces_to_dz_min` compose to cut or thin them.
+
+![The DALES vertical grid](docs/src/assets/vertical_grid.png)
+
+`DefaultThermodynamicsBackend` is DALES's own thermodynamics, dependency-free, with every
+constant read from `DALES_CONSTANTS`. DALES uses two saturation formulations — Murphy–Koop
+in the interior, Tetens/Murray at the surface — and which applies where is part of
+reproducing the archive.
+
+![Saturation vapour pressure](docs/src/assets/saturation.png)
+
 ## ClimaAtmos extension
 
 ```julia
@@ -124,4 +160,4 @@ julia ] activate examples
 julia >  include('examples/read_the_archive.jl')
 ```
 
-Paper / Fortran / namelist disagreements: [`docs/contract.md`](docs/contract.md).
+Paper / Fortran / namelist disagreements: [`docs/src/archive.md`](docs/src/archive.md).

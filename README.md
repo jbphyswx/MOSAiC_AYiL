@@ -48,6 +48,8 @@ cp scripts/env.example scripts/env.local   # edit modules, paths, DALES_NPROC
 | `ayil_config_input_results/YYYYMMDD/` | `namoptions` in git; Zenodo artifacts auto-downloaded on first run |
 | `runs/` | Simulation working directories (created by scripts; gitignored) |
 | `sim_dt/` | Versioned per-day timestep vs sim-time tables for Slurm wall estimates ([README](sim_dt/README.md)) |
+| `python/` | Zarr conversion of a finished run ([README](python/README.md)) |
+| `lib/julia/MOSAiCAYiL.jl/` | **Julia package**: reads the archive and the 3D output, and carries the per-day facts ([README](lib/julia/MOSAiCAYiL.jl/README.md), [docs](lib/julia/MOSAiCAYiL.jl/docs/src)) |
 
 ## Run simulations locally (no Slurm)
 
@@ -93,5 +95,71 @@ cd python && conda run -n MOSAiC_AYiL pytest   # Zarr conversion
 See [python/README.md](python/README.md).
 
 See [scripts/README.md](scripts/README.md).
+
+## Analysis in Julia — [`lib/julia/MOSAiCAYiL.jl`](lib/julia/MOSAiCAYiL.jl)
+
+The pipeline above **produces** the simulations. `MOSAiCAYiL.jl` **reads** them: the Zenodo
+archive the runs consumed and produced, and the `fielddump` output a rerun writes.
+
+```julia
+using MOSAiCAYiL: MOSAiCAYiL as MA
+
+c = MA.case("20200503")
+MA.latitude(c), MA.inversion_height(c), MA.scm_in_levels(c)   # committed tables, no files
+MA.read_variable("sv008", "20200503")                          # q_cloud_ice, corrected units
+MA.testbed_forcing(c)                                          # the ERA5 forcing of that day
+```
+
+### What it gives you
+
+- **One reader over all five archive files.** `read_variable` reaches every variable of
+  `scm_in`, `profiles.001.nc`, `tmser.001.nc`, `mphysprofiles.001.nc` and
+  `samptend.001.nc`, translating `sv008` → `q_cloud_ice` and correcting the units the
+  archive states wrongly (the twelve SB3 scalars are numbers per unit *mass* labelled
+  `(kg/kg)`; `*_rate` is a mixing ratio times a fall speed labelled `kg/m2`).
+- **The 3D output, read lazily off its MPI tiles.** `open_fielddump` reads metadata only and
+  stitches `fielddump.III.JJJ.NNN.nc` onto the global grid on demand, keeping the
+  Arakawa-C staggering (`v` on `ym`, `w` on `zm`). A day is 6.2 GB across 19 variables, so a
+  horizontal level costs one strided read per tile.
+- **Zarr v3, written from Julia.** `using Zarr` adds `write_zarr`/`open_zarr`, an
+  alternative to [`scripts/convert_to_zarr.sh`](python/README.md) that needs no Python and
+  streams a chunk-row at a time.
+- **Per-day facts with no I/O.** Latitude, skin temperatures, CCN, `scm_in` level count,
+  inversion height and cloud top are committed tables looked up by date.
+- **DALES's own thermodynamics**, dependency-free, with every constant read from
+  `modglobal.f90`.
+- **A ClimaAtmos extension** for driving a single-column model with an AYiL day.
+
+![Inversion height and cloud top over the MOSAiC drift](lib/julia/MOSAiCAYiL.jl/docs/src/assets/catalog.png)
+
+*Per-day facts across the 190-day catalog. Both panels are table lookups — no archive file
+is opened to produce them.*
+
+### The grid and the physics it reproduces
+
+Every day ran on the same 287 faces: uniform 10 m below 1220 m, a geometric stretch, then
+uniform ≈185 m above 7139 m.
+
+![The DALES vertical grid](lib/julia/MOSAiCAYiL.jl/docs/src/assets/vertical_grid.png)
+
+DALES evaluates saturation two ways — Murphy & Koop in the interior, Tetens/Murray at the
+surface — and the package keeps them apart, because which one applies where is part of
+reproducing the archive.
+
+![Saturation vapour pressure](lib/julia/MOSAiCAYiL.jl/docs/src/assets/saturation.png)
+
+### Where the sources disagree
+
+The JAMES paper, the AYiL DALES source and the Zenodo namelists conflict in places, and the
+package implements the Fortran that wrote the archive. Both numbers are kept where it
+matters — the 3 h paper protocol beside the 7200 s the Zenodo output actually ran, and the
+paper's 55 μm initial ice beside DALES's `d_ci = 60 μm`.
+[`docs/src/archive.md`](lib/julia/MOSAiCAYiL.jl/docs/src/archive.md) is the list.
+
+```bash
+cd lib/julia/MOSAiCAYiL.jl
+julia --project=. -e 'using Pkg; Pkg.instantiate(); using MOSAiCAYiL'
+julia --project=examples examples/read_the_archive.jl
+```
 
 Contact for the published dataset: Niklas Schnierstein (nschnier@uni-koeln.de).
