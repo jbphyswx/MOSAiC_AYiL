@@ -70,3 +70,20 @@ integration steps through, from a full-level height array:
 (; zf, dzf, dzh) = MA.vertical_metrics(collect(10.0:20.0:150.0))
 dzf[1:4], dzh[1:4]
 ```
+
+`vertical_metrics` returns `zh` alongside them — the cell faces, which DALES builds from the
+centres by `zh[k+1] = zh[k] + 2(zf[k] − zh[k])`.
+
+## Centres and faces are one grid
+
+`prof.inp.001` column 1 is the vertical grid every run used: `modglobal.f90:411-433` reads it
+as `zf` and builds every face from it. [`MOSAiCAYiL.LES_CENTRES`](@ref) is those 286 heights,
+recovered from the stored faces as `(zh[k] + zh[k+1])/2` — the exact inverse of that
+recursion, so it recurses back to [`MOSAiCAYiL.LES_FACES`](@ref) bit for bit:
+
+```@example grid
+Float32.(MA.vertical_metrics(MA.LES_CENTRES).zh) == MA.LES_FACES
+```
+
+The direction is worth keeping straight: in DALES the **centres** are primary and the faces
+derived; in this package the faces are what is stored and the centres come back exactly.

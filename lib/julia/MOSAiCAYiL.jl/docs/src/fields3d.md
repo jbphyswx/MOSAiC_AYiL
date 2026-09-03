@@ -109,3 +109,35 @@ fields = MA.pmap(MA.load_fielddump, run_directories)
 ```
 
 See [Parallel sweeps](parallel.md).
+
+## Pressure, temperature and density
+
+An old `fielddump` carries none of them. [`MOSAiCAYiL.fielddump_thermodynamics`](@ref) derives
+them from the fields that are there and the day's slab-mean column:
+
+```julia
+column = MA.dales_slab_column("20200720"; root = runs)
+MA.open_fielddump(joinpath(runs, "20200720")) do fd
+    th = MA.fielddump_thermodynamics(fd, column)
+    th.temperature[:, :, 50, 2]     # one level, one time
+end
+```
+
+`temperature` and `density` are lazy, like everything else here — nothing is read until
+indexed, and a slice reads only the tiles it touches.
+
+**`pressure` and `exner` are `(nz, nt)`, not three-dimensional.** DALES has no 3D pressure:
+`modfielddump.f90:325-328` broadcasts the slab-mean hydrostatic `presf(k)` over `x` and `y`.
+Storing it per point would cost hundreds of megabytes to hold a few hundred distinct numbers.
+
+`temperature` is `Π θ_l + (L_v/c_p) q_l`, the equation DALES's own `tmp0` solves, and
+`density` is `p/(R_d T_v)` with no ice — matching `rhof`, **not** the anelastic `rhobf`.
+
+Where a run wrote `pressure`, `exner` or `temperature` of its own, they stay in `fd.vars`
+untouched: this function always derives, so the two never shadow each other.
+
+## One label is wrong
+
+`thl` states "Liquid water potential temperature above 300K". That offset belongs to the
+**binary** path (`modfielddump.f90:254-255`); the netCDF path writes the full `θ_l`.
+[`MOSAiCAYiL.fielddump_long_name`](@ref) corrects it.

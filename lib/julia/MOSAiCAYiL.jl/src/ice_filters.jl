@@ -6,7 +6,7 @@ stops being reproducible, hence how high that day can be simulated, and where it
 cloud top sits.
 
 Runnable, so the tables in `ayil_info.jl` can be re-derived rather than trusted.
-SB3 size/fall coefficients are [`SB3_ICE_PARAMS`](@ref) in `constants.jl`.
+SB3 size/fall coefficients are [`SB3_PARTICLES`](@ref) in `microphysics.jl`.
 """
 
 # --- One read per day, shared by every filter ------------------------------- #
@@ -125,7 +125,8 @@ function ice_size_floor(
     cloud_min = eltype(fields.z)(1.0e-8),
 )
     (; z, q_liq, q_ice, n_ice, present) = fields
-    x_floor = (D_min / SB3_ICE_PARAMS.a)^(1 / SB3_ICE_PARAMS.b)
+    ice = SB3_PARTICLES.cloud_ice
+    x_floor = (D_min / ice.a)^(1 / ice.b)
     # Stage 1: find the valid region from the mean-crystal-size criterion.
     bad = present .& (n_ice .> 0) .& (q_ice .> q_min) .& (q_ice ./ n_ice .< x_floor)
     z_max = z_max_below_flagged(z, vec(any(bad, dims = 2)))
@@ -142,7 +143,7 @@ Invalid where the mass-weighted ice fall speed stays below `v_min` while
 significant ice is present — ice that neither sediments nor autoconverts.
 
 The speed is the *realized* one, `ice_rate / q_ice`, which carries the large
-particles that do most of the falling. [`sb3_ice_fall_speed`](@ref) computes the
+particles that do most of the falling. [`sb3_fall_speed`](@ref) computes the
 speed SB3 predicts from the mean state instead; that is a strictly increasing
 function of the same mean particle mass [`ice_size_floor`](@ref) tests, so it adds
 no independent constraint and its magnitudes do not share this threshold.

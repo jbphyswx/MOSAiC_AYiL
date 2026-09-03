@@ -175,19 +175,18 @@ function scm_in_air_density(forcing; backend = DefaultThermodynamicsBackend())
 end
 
 """
-    les_density(date; root = data_root(), time_index = 1)
+    les_density(date, [FT = Float32]; root = data_root(), time_index = 1)
 
 `(z, ρ)`: the DALES cell-centre heights [m] and the slab-mean air density
-[kg/m³] from `profiles.001.nc` `rhof`.
+[kg/m³] from `profiles.001.nc` `rhof`, one column of [`dales_slab_column`](@ref).
 
 `time_index = 1` is t = 300 s, the earliest sample, not t = 0. Not `rhobf`/`rhobh`.
 """
-function les_density(date; root = data_root(), time_index::Int = 1)
-    path = les_profiles_path(date; root)
-    isfile(path) || error("No DALES output at $path")
-    return NC.NCDataset(path, "r") do ds
-        return (vec(Array(ds["zt"])), Array(ds["rhof"])[:, time_index])
-    end
+function les_density(
+    date, ::Type{FT} = Float32; root = data_root(), time_index::Int = 1,
+) where {FT}
+    c = dales_slab_column(date, FT; root)
+    return (c.z, c.rhof[:, time_index])
 end
 
 """
@@ -208,40 +207,139 @@ function les_faces(date; faces = LES_FACES, root = data_root())
 end
 
 """
-    namelist(case; root = data_root())
+    NamelistGroups
 
-The case's DALES `namoptions` as a flat `Dict` of key to raw string value.
-
-For inspection. Physics does not read placeholders (`xlat`/`xlon`/`z0mav`/`z0hav`/
-`albedoav`); those come from `scm_in` via the day-scalar table.
+`&group => key => raw string`, the shape [`namelist`](@ref) returns.
 """
-function namelist(c::MOSAiCAYiLCase; root = data_root())
-    path = namoptions_path(c; root)
+const NamelistGroups = Dict{Symbol, Dict{Symbol, String}}
+
+"""
+    namelist(date; root = data_root())
+
+The day's DALES `namoptions` as `&group => key => raw string`, with `!` comments stripped.
+
+Group identity is kept because the file needs it: `dtav` appears in nine groups carrying two
+different values, `timeav` in five carrying two, `lstat` in two. Reach a value with
+[`namelist_value`](@ref), which parses it and refuses a
+[`NAMELIST_PLACEHOLDERS`](@ref) entry.
+"""
+function namelist(date; root = data_root())
+    path = namoptions_path(date; root)
     isfile(path) || error("No namoptions at $path")
-    out = Dict{String, String}()
+    out = NamelistGroups()
+    group = nothing
     for line in eachline(path)
         stripped = strip(first(split(line, '!')))
-        (isempty(stripped) || startswith(stripped, '&') || stripped == "/") && continue
+        isempty(stripped) && continue
+        if startswith(stripped, '&')
+            group = Symbol(lowercase(stripped[(nextind(stripped, 1)):end]))
+            haskey(out, group) && error("`&$group` appears twice in $path")
+            out[group] = Dict{Symbol, String}()
+            continue
+        end
+        if stripped == "/"
+            group = nothing
+            continue
+        end
         parts = split(stripped, '=', limit = 2)
         length(parts) == 2 || continue
-        out[strip(parts[1])] = strip(parts[2])
+        isnothing(group) &&
+            error("`$(strip(parts[1]))` is outside any &group in $path")
+        out[group][Symbol(lowercase(strip(parts[1])))] = String(strip(parts[2]))
     end
-    isempty(out) && error("Parsed no key = value pairs from $path")
+    isempty(out) && error("Parsed no groups from $path")
     return out
 end
 
-function _namelist_number(::Type{T}, nl, key, path_hint) where {T}
-    haskey(nl, key) || error("`$key` is not in the AYiL namoptions ($path_hint)")
-    raw = replace(nl[key], "d" => "e", "D" => "e")
-    value = tryparse(T, raw)
-    isnothing(value) && error("`$key = $(nl[key])` is not a $T")
+"""
+    namelist_groups_with(nl, key)
+
+Every group of `nl` carrying `key`, ascending. Empty when none does.
+"""
+namelist_groups_with(nl::NamelistGroups, key::Symbol) =
+    sort!([g for (g, kv) in nl if haskey(kv, key)])
+
+function _unique_group(nl::NamelistGroups, key::Symbol)
+    groups = namelist_groups_with(nl, key)
+    isempty(groups) && error("`$key` is in no group of this namelist.")
+    length(groups) == 1 || error(
+        "`$key` is in $(length(groups)) groups — \
+         $(join(("&" .* String.(groups)), ", ")); pass one, as \
+         `namelist_value(nl, :$(first(groups)), :$key)`.",
+    )
+    return first(groups)
+end
+
+_parse_namelist(::Type{String}, raw::AbstractString) = String(strip(raw, ['\'', '"']))
+
+function _parse_namelist(::Type{Bool}, raw::AbstractString)
+    flag = lowercase(strip(raw, '.'))
+    flag in ("true", "t") && return true
+    flag in ("false", "f") && return false
+    return nothing
+end
+
+_parse_namelist(::Type{T}, raw::AbstractString) where {T <: Real} =
+    tryparse(T, replace(raw, "d" => "e", "D" => "e"))
+
+"""
+    namelist_value([T,] nl, group, key)
+    namelist_value([T,] nl, key)
+
+The value of `&group`'s `key`. With `T`, parsed: `Bool` reads `.true.`/`.false.`, a `Real`
+reads Fortran's `d` exponent, `String` strips the quotes.
+
+Without `group`, a key carried by more than one group errors and names them. A
+[`NAMELIST_PLACEHOLDERS`](@ref) entry errors naming the accessor that supersedes it;
+[`namelist_placeholder`](@ref) returns its raw string.
+"""
+function namelist_value(nl::NamelistGroups, group::Symbol, key::Symbol)
+    haskey(nl, group) || error(
+        "`&$group` is not in this namelist; it has \
+         $(join(("&" .* String.(sort!(collect(keys(nl))))), ", ")).",
+    )
+    entries = nl[group]
+    haskey(entries, key) || error(
+        "`$key` is not in `&$group`; it has \
+         $(join(String.(sort!(collect(keys(entries)))), ", ")).",
+    )
+    accessor = get(NAMELIST_PLACEHOLDERS, (group, key), nothing)
+    isnothing(accessor) || error(
+        "`&$group $key` is a placeholder DALES overwrote from `scm_in` every substep; the \
+         value the run used is `$accessor(case)`. `namelist_placeholder` returns the raw \
+         string.",
+    )
+    return entries[key]
+end
+
+function namelist_value(::Type{T}, nl::NamelistGroups, group::Symbol, key::Symbol) where {T}
+    value = _parse_namelist(T, namelist_value(nl, group, key))
+    isnothing(value) &&
+        error("`&$group $key = $(nl[group][key])` is not a $T.")
     return value
 end
 
+namelist_value(nl::NamelistGroups, key::Symbol) =
+    namelist_value(nl, _unique_group(nl, key), key)
+
+namelist_value(::Type{T}, nl::NamelistGroups, key::Symbol) where {T} =
+    namelist_value(T, nl, _unique_group(nl, key), key)
+
+"""
+    namelist_placeholder(nl, group, key)
+
+The raw string of a [`NAMELIST_PLACEHOLDERS`](@ref) entry, which is not what the run used.
+"""
+function namelist_placeholder(nl::NamelistGroups, group::Symbol, key::Symbol)
+    haskey(NAMELIST_PLACEHOLDERS, (group, key)) ||
+        error("`&$group $key` is not a placeholder; use `namelist_value`.")
+    return nl[group][key]
+end
+
 """Namelist `xlat` [degrees] — a placeholder; use [`latitude`](@ref) for physics."""
-namelist_latitude(c::MOSAiCAYiLCase; root = data_root()) =
-    _namelist_number(Float64, namelist(c; root), "xlat", namoptions_path(c; root))
+namelist_latitude(date; root = data_root()) =
+    parse(Float64, namelist_placeholder(namelist(date; root), :domain, :xlat))
 
 """Namelist `xlon` [degrees] — a placeholder; use [`longitude`](@ref) for physics."""
-namelist_longitude(c::MOSAiCAYiLCase; root = data_root()) =
-    _namelist_number(Float64, namelist(c; root), "xlon", namoptions_path(c; root))
+namelist_longitude(date; root = data_root()) =
+    parse(Float64, namelist_placeholder(namelist(date; root), :domain, :xlon))

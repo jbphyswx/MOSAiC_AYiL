@@ -27,6 +27,20 @@ surface_temperature(forcing) = surface_temperature(
 )
 
 """
+    surface_pottemp(T_skin, ps; backend)
+    surface_pottemp(case; backend)
+
+The skin potential temperature [K] DALES carries as `thls`, `T_skin / Π(ps)`
+(`modtestbed.f90:574-578`, which applies `iexner = (ps/pref0)^(-R_d/c_p)` to all three skin
+temperatures). The case method reads the day-scalar table and no file.
+"""
+surface_pottemp(T_skin::FT, ps::FT; backend = DefaultThermodynamicsBackend()) where {FT} =
+    T_skin / exner(backend, ps)
+
+surface_pottemp(c::MOSAiCAYiLCase; kwargs...) =
+    surface_pottemp(promote(t_skin(c), ps(c))...; kwargs...)
+
+"""
     qseaicefrctsurf(f, T_ocean, T_seaice, ps; backend, T_melt)
 
 Surface saturation specific humidity from AYiL `qseaicefrctsurf`

@@ -68,6 +68,32 @@ NCDataset(MA.les_profiles_path("20200503"), "r") do ds
 end
 ```
 
+## Numbers per unit mass
+
+DALES stores the SB3 scalars as number per unit *mass*, so reaching a number per unit volume
+means multiplying by the day's air density. `MOSAiCAYiL.ρ_power` says what a variable needs —
+`1` for a number, `2` for a number variance, `0` for everything else — and the date-taking
+method supplies the density itself:
+
+```julia
+MA.read_variable("dn_i_inuc", "20200503"; file = :mphys)   # m^-3 s^-1
+```
+
+`mphysprofiles.001.nc` and `samptend.001.nc` carry no `rhof` of their own; the density comes
+from `profiles.001.nc`, whose `time`, `zt` and `zm` they share exactly.
+
+The open-dataset method takes the density as an argument rather than looking for one, so it
+refuses instead of quietly handing back unconverted values:
+
+```julia
+NCDataset(MA.mphys_path("20200503"), "r") do ds
+    ρ = MA.dales_slab_column("20200503").rhof
+    MA.read_variable(ds, "dn_i_inuc"; file = :mphys, density = ρ)
+end
+```
+
+`translate_units = false` returns the archive's own values and its own units.
+
 ## Names
 
 The twelve SB3 scalars and the families built on them resolve to what they hold:

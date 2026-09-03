@@ -21,6 +21,9 @@ Documenter.makedocs(;
         "Physics" => [
             "Thermodynamics" => "thermodynamics.md",
             "The vertical grid" => "grid.md",
+            "The surface layer" => "surface_layer.md",
+            "Microphysics" => "microphysics.md",
+            "Radiation" => "radiation.md",
         ],
         "Extensions" => [
             "Zarr" => "zarr.md",

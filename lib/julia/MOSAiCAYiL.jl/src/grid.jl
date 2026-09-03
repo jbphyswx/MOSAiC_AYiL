@@ -92,6 +92,20 @@ const LES_FACES = Float32[
 """Top face [m] of the DALES grid, the last of [`LES_FACES`](@ref)."""
 const LES_TOP_FACE = last(LES_FACES)
 
+"""
+The 286 cell-centre heights [m] of the DALES grid, `(zh[k] + zh[k+1])/2` over
+[`LES_FACES`](@ref).
+
+That is the exact inverse of the recursion `zh[k+1] = zh[k] + 2(zf[k] − zh[k])` DALES builds
+its faces with (`modglobal.f90:429-431`), so this recurses back to `LES_FACES` bit for bit.
+The heights DALES read are `prof.inp.001` column 1, which these reproduce to 2.1e-4 m — the
+scale of the archive's own `zt` rounding.
+"""
+const LES_CENTRES = [
+    (Float64(LES_FACES[k]) + Float64(LES_FACES[k + 1])) / 2
+    for k in 1:(length(LES_FACES) - 1)
+]
+
 """First centre [m] of the DALES grid (`zt[1]`)."""
 const LES_Z_CENTRE_BOTTOM = 5.0f0
 
@@ -247,12 +261,13 @@ function pressure_from_face(
 end
 
 """
-    vertical_metrics(zf) -> (; zf, dzf, dzh)
+    vertical_metrics(zf) -> (; zf, zh, dzf, dzh)
 
 DALES's full-level metrics from the `kmax` full-level heights (`modglobal.f90` `initglobal`).
 
 Half levels come from `zh[k+1] = zh[k] + 2(zf[k] − zh[k])` with `zh[1] = 0`; the returned
-`zf` is extended by one level so it is `k1 = kmax + 1` long, matching the Fortran.
+`zf` is extended by one level so it is `k1 = kmax + 1` long, matching the Fortran. `zh` is
+`kmax + 1` long, the faces of the `kmax` cells.
 """
 function vertical_metrics(zf_in::AbstractVector{FT}) where {FT}
     kmax = length(zf_in)
@@ -274,7 +289,7 @@ function vertical_metrics(zf_in::AbstractVector{FT}) where {FT}
     for k in 2:(kmax + 1)
         dzh[k] = zf[k] - zf[k - 1]
     end
-    return (; zf, dzf, dzh)
+    return (; zf, zh, dzf, dzh)
 end
 
 """

@@ -15,7 +15,8 @@ Test.@testset "a fielddump written to Zarr reads back unchanged" begin
         Test.@test isdir(store)
 
         z = MA.open_zarr(store)
-        Test.@test sort(collect(keys(z.vars))) == ["n_rain", "thl", "v", "w"]
+        Test.@test sort(collect(keys(z.vars))) ==
+                   ["n_rain", "ql", "qt", "thl", "v", "w"]
 
         # the stagger survives the round trip through `dimension_names`
         Test.@test z.dims["thl"] == ("xt", "yt", "zt", "time")
