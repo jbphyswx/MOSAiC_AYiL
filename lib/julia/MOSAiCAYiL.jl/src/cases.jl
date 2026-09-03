@@ -68,9 +68,20 @@ n_cases() = 190 #length(MOSAiCAYiL_dates)
 
 
 
+"""
+    date_string(date)
+
+A day as `yyyymmdd`, from a `Date`, a `yyyymmdd` string or a case. This is the key the
+archive's file names and the committed tables use.
+"""
 date_string(d::Dates.Date) = Dates.format(d, "yyyymmdd")
 date_string(date::AbstractString) = date_string(parse_MOSAiCAYiL_date(date))
 
+"""
+    parse_MOSAiCAYiL_date(date)
+
+A `Date` from a `yyyymmdd` string, a `Date` or a case. Any other spelling errors.
+"""
 function parse_MOSAiCAYiL_date(date::AbstractString)
     (length(date) == 8 && all(isdigit, date)) ||
         error("An AYiL date is `yyyymmdd`; got `$date`.")
@@ -79,6 +90,7 @@ end
 
 parse_MOSAiCAYiL_date(d::Dates.Date) = d
 
+"""Whether `date` is one of the 190 published AYiL days."""
 @inline is_MOSAiCAYiL_date(d::Dates.Date) = (d ∈ MOSAiCAYiL_dates_set)
 
 is_MOSAiCAYiL_date(date::AbstractString) = is_MOSAiCAYiL_date(parse_MOSAiCAYiL_date(date))
@@ -116,6 +128,7 @@ Base.show(io::IO, c::MOSAiCAYiLCase) = print(io, "MOSAiCAYiLCase(", date_string(
 
 Dates.Date(c::MOSAiCAYiLCase) = c.date
 
+"""A case's name as `AYiL_yyyymmdd`, for labelling a run or an output directory."""
 case_name(c::MOSAiCAYiLCase) = "AYiL_$(date_string(c))"
 
 """

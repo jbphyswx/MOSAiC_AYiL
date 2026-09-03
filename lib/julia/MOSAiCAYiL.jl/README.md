@@ -97,7 +97,7 @@ using MOSAiCAYiL
 c = MOSAiCAYiL.case("20200503")
 forcing = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(Float64, c)
 setup = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(Float64, c)
-grid = MOSAiCAYiL.mosaic_grid(Float64)  # LES faces; compose truncate/coarsen first
+grid = MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(Float64)  # LES faces; compose truncate/coarsen first
 ```
 
 Default initial density is `scm_in_air_density`. Pass

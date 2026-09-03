@@ -335,13 +335,13 @@ function ClimaAtmos.external_forcing_tendency!(
 end
 
 """
-    mosaic_scm_coriolis(FT, case; params, kwargs...)
+    ClimaAtmos_MOSAiCAYiL_scm_coriolis(FT, case; params, kwargs...)
 
 ClimaAtmos `scm_coriolis` for one AYiL day: geostrophic wind from `scm_in` and
 the Coriolis parameter at the day's drift position. Together with Coriolis this
 is `-f × (u - u_g)`.
 """
-function MOSAiCAYiL.mosaic_scm_coriolis(
+function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_scm_coriolis(
     ::Type{FT},
     c::MOSAiCAYiL.MOSAiCAYiLCase;
     params,
@@ -362,14 +362,14 @@ end
 # --- Grid ------------------------------------------------------------------- #
 
 """
-    mosaic_grid(FT; faces = LES_FACES, kwargs...)
+    ClimaAtmos_MOSAiCAYiL_grid(FT; faces = LES_FACES, kwargs...)
 
 A ClimaAtmos `ColumnGrid` from a face vector. The faces *are* the specification:
 compose [`MOSAiCAYiL.truncate_faces_to_top`](@ref) and
 [`MOSAiCAYiL.coarsen_faces_to_dz_min`](@ref) before passing `faces`. There is no
 parallel `z_top` / `dz_min` keyword, and no per-day grid.
 """
-function MOSAiCAYiL.mosaic_grid(
+function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(
     ::Type{FT};
     faces::AbstractVector = MOSAiCAYiL.LES_FACES,
     kwargs...,
@@ -395,7 +395,7 @@ function MOSAiCAYiL.mosaic_grid(
 end
 
 """Centre-level heights [m] of `grid`, ascending."""
-MOSAiCAYiL.mosaic_z(grid) = vec(
+MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_z(grid) = vec(
     Array(
         parent(
             CC.Fields.coordinate_field(
@@ -408,7 +408,7 @@ MOSAiCAYiL.mosaic_z(grid) = vec(
 # --- Insolation ------------------------------------------------------------- #
 
 """
-    MOSAiCInsolation{FT}(cos_zenith, toa_flux)
+    ClimaAtmosMOSAiCAYiLInsolation{FT}(cos_zenith, toa_flux)
 
 Insolation held at a fixed zenith angle, as the reference runs did
 (`lcnstzenithtime = .true.`, `cnstzenithtime = 11` on all 190 days).
@@ -417,12 +417,12 @@ Insolation held at a fixed zenith angle, as the reference runs did
 `RRTMGP.toa_sw_flux_dn` the same way `TimeVaryingInsolation` does. Polar night is
 `(eps(FT), 0)`: no incoming flux, with the positive zenith cosine RRTMGP requires.
 """
-struct MOSAiCInsolation{FT} <: ClimaAtmos.AbstractInsolation
+struct ClimaAtmosMOSAiCAYiLInsolation{FT} <: ClimaAtmos.AbstractInsolation
     cos_zenith::FT
     toa_flux::FT
 end
 
-function MOSAiCAYiL.MOSAiCInsolation(
+function MOSAiCAYiL.ClimaAtmosMOSAiCAYiLInsolation(
     ::Type{FT},
     c::MOSAiCAYiL.MOSAiCAYiLCase;
     reference_time::Dates.DateTime = MOSAiCAYiL.reference_datetime(c),
@@ -432,15 +432,15 @@ function MOSAiCAYiL.MOSAiCInsolation(
 ) where {FT <: AbstractFloat}
     (; S, μ) =
         Insolation.insolation(reference_time, latitude, longitude, insolation_params)
-    return μ > 0 ? MOSAiCInsolation{FT}(FT(μ), FT(S)) :
-           MOSAiCInsolation{FT}(eps(FT), zero(FT))
+    return μ > 0 ? ClimaAtmosMOSAiCAYiLInsolation{FT}(FT(μ), FT(S)) :
+           ClimaAtmosMOSAiCAYiLInsolation{FT}(eps(FT), zero(FT))
 end
 
 function ClimaAtmos.set_insolation_variables!(
     Y,
     p,
     t,
-    insolation::MOSAiCInsolation,
+    insolation::ClimaAtmosMOSAiCAYiLInsolation,
 )
     (; rrtmgp_solver) = p.radiation
     ClimaAtmos.RRTMGP.cos_zenith(rrtmgp_solver) .= insolation.cos_zenith
@@ -477,7 +477,7 @@ function MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(
     forcing_data = MOSAiCAYiL.testbed_forcing(c; root, time_index),
     density = MOSAiCAYiL.scm_in_air_density(forcing_data),
     tke = MOSAiCAYiL.dales_tke_seed,
-    insolation = MOSAiCAYiL.MOSAiCInsolation(FT, c),
+    insolation = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLInsolation(FT, c),
     external_forcing = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(
         FT,
         c;
@@ -589,12 +589,12 @@ _total_ice(
 ) = @. lazy((state.c.ρq_icl + state.c.ρq_sno) / state.c.ρ)
 
 """
-    register_condensate_totals!()
+    ClimaAtmos_MOSAiCAYiL_register_condensate_totals!()
 
 Register `ql_all` and `qi_all`. Idempotent: a name already in the registry is
 left alone.
 """
-function MOSAiCAYiL.register_condensate_totals!(;
+function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_register_condensate_totals!(;
     registry = ClimaAtmos.Diagnostics.ALL_DIAGNOSTICS,
 )
     haskey(registry, "ql_all") || ClimaAtmos.Diagnostics.add_diagnostic_variable!(
@@ -615,7 +615,7 @@ function MOSAiCAYiL.register_condensate_totals!(;
 end
 
 function __init__()
-    MOSAiCAYiL.register_condensate_totals!()
+    MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_register_condensate_totals!()
     return nothing
 end
 
@@ -693,7 +693,7 @@ const CLIMAATMOS_FLUX_FROM_DALES = Dict(
     "rsdt" => ("swd", :top),
 )
 
-function MOSAiCAYiL.climaatmos_field(
+function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_field(
     short_name::AbstractString,
     date;
     root = MOSAiCAYiL.data_root(),
@@ -709,7 +709,7 @@ function MOSAiCAYiL.climaatmos_field(
     spec = get(CLIMAATMOS_FROM_DALES, short_name) do
         error(
             "No DALES translation for ClimaAtmos `$short_name`; known names are " *
-            join(sort(MOSAiCAYiL.climaatmos_translated_names()), ", "),
+            join(sort(MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_translated_names()), ", "),
         )
     end
     sources = NamedTuple[]
@@ -727,7 +727,7 @@ function MOSAiCAYiL.climaatmos_field(
     return (; axes.z, axes.time, data, spec.units)
 end
 
-MOSAiCAYiL.climaatmos_translated_names() = vcat(
+MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_translated_names() = vcat(
     collect(keys(CLIMAATMOS_FROM_DALES)),
     collect(keys(CLIMAATMOS_FLUX_FROM_DALES)),
 )

@@ -40,7 +40,7 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
         )
 
         faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
-        grid = MA.mosaic_grid(FT; faces)
+        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; faces)
         sp = ClimaAtmos.get_spaces(grid)
         coords = ClimaAtmos.CC.Fields.coordinate_field(sp.center_space)
         Y = (; c = map(_ -> (; ρ = FT(1)), coords))
@@ -59,8 +59,8 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
         day = MA.case(date)
         forcing_data = MA.testbed_forcing(day)
         faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
-        grid = MA.mosaic_grid(FT; faces)
-        z = MA.mosaic_z(grid)
+        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; faces)
+        z = MA.ClimaAtmos_MOSAiCAYiL_z(grid)
         params = MA.ClimaAtmos_MOSAiCAYiL_params(FT, day)
         setup = MA.ClimaAtmosMOSAiCAYiLSetup(FT, day; forcing_data)
         lg = ClimaAtmos.CC.Fields.local_geometry_field(
@@ -109,10 +109,10 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
     end
 
     Test.@testset "polar-night insolation" begin
-        may = MA.MOSAiCInsolation(FT, MA.case("20200503"))
+        may = MA.ClimaAtmosMOSAiCAYiLInsolation(FT, MA.case("20200503"))
         Test.@test may.cos_zenith > 0
         Test.@test may.toa_flux > 1000
-        december = MA.MOSAiCInsolation(FT, MA.case("20191219"))
+        december = MA.ClimaAtmosMOSAiCAYiLInsolation(FT, MA.case("20191219"))
         Test.@test december.toa_flux == 0
         Test.@test december.cos_zenith == eps(FT)
     end
@@ -155,6 +155,6 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
         Test.@test ext.CLIMAATMOS_FROM_DALES["cli"].f(read) == sv008
         hus = ext.CLIMAATMOS_FROM_DALES["hus"].f(read)
         Test.@test hus == qt .+ sv008 .+ sv002 .+ sv010 .+ sv012
-        Test.@test "clw" in MA.climaatmos_translated_names()
+        Test.@test "clw" in MA.ClimaAtmos_MOSAiCAYiL_translated_names()
     end
 end
