@@ -759,6 +759,30 @@ function _ascending_levels(data, file::Symbol, dims)
 end
 
 """
+    ρ_power(ds, raw; file)
+
+The power of air density that converts `raw` to per-volume units, `0` when the values stand
+as the archive holds them: `1` for a number, `2` for a number variance.
+
+Reads the variable's attributes, not its data.
+"""
+function ρ_power(
+    ds::NC.NCDataset, raw::AbstractString; file::Symbol = variable_product(raw),
+)::Int
+    haskey(ds, raw) || error("`$raw` is not in $(NC.path(ds))")
+    var = ds[raw]
+    return last(
+        dales_variable_attributes(
+            raw,
+            physical_name(raw, file),
+            get(var.attrib, "units", ""),
+            get(var.attrib, "longname", get(var.attrib, "long_name", raw)),
+            file,
+        ),
+    )
+end
+
+"""
     read_variable(raw, date; root, translate_units)
 
 One raw archive variable, as `(; raw, description, z, time, data, units, long_name)`.
@@ -766,6 +790,10 @@ One raw archive variable, as `(; raw, description, z, time, data, units, long_na
 `description` is its [`physical_name`](@ref). With `translate_units` the values are
 converted to the units [`dales_variable_attributes`](@ref) reports — a number
 becomes per volume — so a caller never handles the archive's mislabelling itself.
+
+A number per unit mass is converted by the day's `rhof`, taken from
+[`dales_slab_column`](@ref). `mphysprofiles.001.nc` and `samptend.001.nc` carry no `rhof` of
+their own and share `profiles.001.nc`'s `time`, `zt` and `zm` exactly.
 
 A [`BULKMICROSTAT3`](@ref) variable comes back on the times it is an average for,
 which is one record on from where it is stored, so it has one sample fewer than
@@ -791,21 +819,28 @@ function read_variable(
     path = _archive_path(Val(file), date, root)
     isfile(path) || error("No archive file at $path")
     return NC.NCDataset(path, "r") do ds
-        read_variable(ds, raw; file, translate_units)
+        density =
+            translate_units && ρ_power(ds, raw; file) != 0 ?
+            dales_slab_column(date; root).rhof : nothing
+        read_variable(ds, raw; file, translate_units, density)
     end
 end
 
 """
-    read_variable(ds, raw; file, translate_units)
+    read_variable(ds, raw; file, translate_units, density)
 
 The same, from an archive file already open, so a caller reading many variables of one
 day opens it once.
+
+`density` is the day's `rhof`, required when [`ρ_power`](@ref) is not `0` and
+`translate_units` is set; the date-taking method supplies it.
 """
 function read_variable(
     ds::NC.NCDataset,
     raw::AbstractString;
     file::Symbol = variable_product(raw),
     translate_units::Bool = true,
+    density = nothing,
 )
     haskey(ds, raw) || error("`$raw` is not in $(NC.path(ds))")
     var = ds[raw]
@@ -813,12 +848,16 @@ function read_variable(
     description = physical_name(raw, file)
     raw_units = get(var.attrib, "units", "")
     long_name = get(var.attrib, "longname", get(var.attrib, "long_name", raw))
-    units, long_name, ρ_power =
+    units, long_name, power =
         dales_variable_attributes(raw, description, raw_units, long_name, file)
-    if ρ_power != 0
+    if power != 0
         if translate_units
-            ρ = _read_oriented(ds, "rhof")
-            data = data .* ρ .^ ρ_power
+            isnothing(density) && error(
+                "`$raw` is a number per unit mass; converting it needs the day's `rhof`. \
+                 Pass `density = dales_slab_column(date; root).rhof`, or read it with \
+                 `translate_units = false`.",
+            )
+            data = data .* density .^ power
         else
             # the values were left as the archive holds them, so the units must
             # say so too rather than reporting the conversion that did not happen

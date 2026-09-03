@@ -25,26 +25,17 @@ end
 
 Test.@testset "fromztop reproduces the archive's own pressure" begin
     b = MA.DefaultThermodynamicsBackend()
-    date = "20200503"
-    rd(v) = Float64.(MA.read_variable(v, date; file = :profiles, translate_units = false).data)
-    zt = vec(rd("zt"))
-    thl, qt, ql = rd("thl")[:, 1], rd("qt")[:, 1], rd("ql")[:, 1]
-    thv, presh = rd("thv")[:, 1], rd("presh")[:, 1]
-    ps = presh[1]                       # DALES starts the half-level branch at the surface
+    c = MA.dales_slab_column("20200503", Float64)
+    thl, qt, ql = c.θ_l[:, 1], c.q_tot[:, 1], c.q_liq[:, 1]
+    thv, presh, presf = c.θ_v[:, 1], c.presh[:, 1], c.presf[:, 1]
+    ps = c.ps[1]                        # DALES starts the half-level branch at the surface
 
-    # DALES integrates the dry potential temperature, which it forms from theta_l; the
-    # exner it needs is the pressure being solved for, so this iterates as DALES does
-    theta_dry(p) = thl .+ (MA.L_v0(b) / MA.cp_d(b)) .* ql ./ MA.exner.(b, p)
-    p = copy(presh)
-    local out
-    for _ in 1:12
-        out = MA.pressure_fromztop(ps, theta_dry(p), qt, ql, zt)
-        p = out.presf
-    end
-    Test.@test maximum(abs, (out.presh .- presh) ./ presh) < 1.0e-5
+    # `presh` is read, so the reconstruction is what carries a claim about the routine
+    rebuilt = MA.pressure_fromztop(ps, c.θ[:, 1], qt, ql, c.z; backend = b)
+    Test.@test maximum(abs, (rebuilt.presh .- presh) ./ presh) < 1.0e-5
 
     # the archive's `thv` is the full-level theta_v the half-level branch steps through
-    (; dzf) = MA.vertical_metrics(zt)
+    (; dzf) = MA.vertical_metrics(c.z)
     κ, g = MA.R_d(b) / MA.cp_d(b), MA.grav(b)
     cp, p0 = MA.cp_d(b), MA.p_ref(b)
     ph = similar(presh)
@@ -55,12 +46,12 @@ Test.@testset "fromztop reproduces the archive's own pressure" begin
     Test.@test maximum(abs, (ph .- presh) ./ presh) < 1.0e-5
 
     # `presf` is a different quantity: using it as the stored `presh` is a 1% error
-    Test.@test maximum(abs, (out.presf .- presh) ./ presh) > 1.0e-2
+    Test.@test maximum(abs, (presf .- presh) ./ presh) > 1.0e-2
 
     # the adjustment closes on every level of a real column
-    for k in eachindex(zt)
-        (; T, q_liq, q_ice) = MA.saturation_adjust_pθq(b, out.presf[k], thl[k], qt[k])
-        Test.@test MA.liquid_ice_pottemp(b, T, out.presf[k], q_liq + q_ice) ≈ thl[k] atol = 1.0e-6
+    for k in eachindex(c.z)
+        (; T, q_liq, q_ice) = MA.saturation_adjust_pθq(b, presf[k], thl[k], qt[k])
+        Test.@test MA.liquid_ice_pottemp(b, T, presf[k], q_liq + q_ice) ≈ thl[k] atol = 1.0e-6
     end
 end
 

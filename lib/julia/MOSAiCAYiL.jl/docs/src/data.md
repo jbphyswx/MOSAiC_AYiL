@@ -69,12 +69,21 @@ Five of those are netCDF and are what [Reading a variable](reading.md) covers:
 | `samptend.001.nc` | conditionally-sampled tendency budgets |
 
 The rest are DALES's plain-text inputs and its text copies of the time series. `namoptions`
-is readable as a flat dictionary, but note that several of its entries are placeholders
-DALES overwrote every step — see [What the reference runs did](archive.md).
+is read with its groups kept, because the file needs them: `dtav` appears in nine groups
+carrying two different values, `timeav` in five carrying two.
 
 ```julia
-MA.namelist(c)["imicro"]      # "11", the SB3 two-moment microphysics
+nl = MA.namelist(c)
+MA.namelist_value(Int, nl, :nammicrophysics, :imicro)   # 11, the SB3 two-moment microphysics
+MA.namelist_value(Float64, nl, :namfielddump, :dtav)    # 1800.0, which is FIELDDUMP_DT_S
+MA.namelist_groups_with(nl, :dtav)                      # the nine groups carrying it
 ```
+
+Eight entries are placeholders DALES overwrote from `scm_in` every substep. Reading one errors
+and names the accessor carrying the value the run actually used, so a placeholder cannot be
+mistaken for physics — `&physics ps` is out by about 970 Pa and `&physics thls` by about 21 K.
+`namelist_placeholder` returns the raw string for provenance. See
+[What the reference runs did](archive.md).
 
 ## Regenerating the committed tables
 

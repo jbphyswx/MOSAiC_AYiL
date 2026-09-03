@@ -1,8 +1,8 @@
 """
     constants.jl
 
-Ensemble-wide clocks, namelist physics (used vs placeholders), SB3 ice size/fall,
-and ice-init diameters. None of this needs a NetCDF or the artifact.
+Ensemble-wide clocks, namelist physics (used vs placeholders), and ice-init diameters.
+None of this needs a NetCDF or the artifact. The SB3 parameters are `microphysics.jl`.
 """
 
 # --- Clocks ----------------------------------------------------------------- #
@@ -16,16 +16,16 @@ const PAPER_RUNTIME_S = 10800
 """First `profiles.001.nc` output time [s]."""
 const PROFILES_T0_S = 300
 
-"""`profiles.001.nc` output interval [s]."""
+"""`profiles.001.nc` output interval [s], `&namgenstat timeav`."""
 const PROFILES_DT_S = 300
 
 """Published profile times: `300:300:7200`."""
 const PROFILES_TIME = PROFILES_T0_S:PROFILES_DT_S:PUBLISHED_RUNTIME_S
 
-"""`tmser.001.nc` output interval [s]."""
+"""`tmser.001.nc` output interval [s], `&namtimestat dtav`."""
 const TMSER_DT_S = 60
 
-"""Fielddump interval [s] (`namfielddump dtav`) for this repo's 3 h regeneration."""
+"""Fielddump interval [s], `&namfielddump dtav`, for this repo's 3 h regeneration."""
 const FIELDDUMP_DT_S = 1800
 
 """Paper Appendix C evaluation time [s] (1.5 h)."""
@@ -44,7 +44,7 @@ t_end(::MOSAiCAYiLCase) = PUBLISHED_RUNTIME_S
 
 # --- Regeneration fielddump ----------------------------------- #
 
-"""`namfielddump khigh`: vertical levels written to fielddump."""
+"""`&namfielddump khigh`: vertical levels written to fielddump."""
 const FIELDDUMP_NZ = 200
 
 
@@ -114,22 +114,35 @@ const NAMELIST = (;
     lmomsubs = false,
     llsadv = false,
     scm_ls_advection_zero = true,
-    sponge_level_fraction = 0.25,
-    sponge_tau_top_s = 360.0,      # 6 min at the top
 )
 
-# """
-# Namelist values written on all 190 days and overwritten every step from `scm_in`
-# (`modtimedep.f90`). Not physics: the per-day values are the day-scalar table, and
-# `albedoav = 0.06` is an open-ocean albedo that applies to none of these days.
-# """
-# const NAMELIST_PLACEHOLDERS = (;
-#     xlat = 78.41,
-#     xlon = 8.47,
-#     z0mav = 8.0e-4,
-#     z0hav = 8.5e-4,
-#     albedoav = 0.06,
-# )
+"""
+Namelist entries written on all 190 days and overwritten from `scm_in` every substep
+(`modtimedep.f90:206-208`, `:522-538`), as `(group, key) => the accessor carrying the value
+the run used`.
+
+Not physics: `albedoav = 0.06` is an open-ocean albedo that applies to none of these days.
+`thls` is a *potential* temperature — `modtestbed.f90:574-578` divides the `scm_in` skin
+temperature by `Π(ps)` — so its accessor is [`surface_pottemp`](@ref), not [`t_skin`](@ref).
+"""
+const NAMELIST_PLACEHOLDERS = Dict{Tuple{Symbol, Symbol}, Symbol}(
+    (:domain, :xlat) => :latitude,
+    (:domain, :xlon) => :longitude,
+    (:namsurface, :z0mav) => :mom_rough,
+    (:namsurface, :z0hav) => :heat_rough,
+    (:namsurface, :albedoav) => :albedo,
+    (:namsurface, :seaicefrct) => :sea_ice_frct,
+    (:physics, :ps) => :ps,
+    (:physics, :thls) => :surface_pottemp,
+)
+
+"""
+    xday(case)
+
+Day of year the run's insolation used (`&domain xday`), which is `Dates.dayofyear` on
+190/190 days. The only namelist key that varies between days.
+"""
+xday(c::MOSAiCAYiLCase) = Dates.dayofyear(c.date)
 
 
 """
@@ -147,49 +160,6 @@ nudging_parameters(::MOSAiCAYiLCase) = (;
     ramp_depth = NAMELIST.tb_zmidnudge,
     z_min = NAMELIST.tb_zminnudge,
 )
-
-# --- SB3 ice size / fall (`modmicrodata3.f90`) -------------------------------- #
-
-"""
-SB3 cloud-ice size and fall-speed coefficients, from DALES `modmicrodata3.f90`.
-
-Mean particle mass `x` [kg] maps to diameter as `D = a x^b` and to fall speed as
-`v = α x^β (ρ_ref/ρ)^γ`, with `x` bounded to `[x_min, x_max]`.
-"""
-const SB3_ICE_PARAMS = (;
-    a = 0.217,
-    b = 0.302115,
-    α = 41.9,
-    β = 0.36,
-    γ = 0.5,
-    x_min = 1.0e-12,      # qi_min
-    x_max = 1.0e-7,       # qi_max
-    ρ_ref = 1.225,
-)
-
-"""Deposition-nucleated ice number cap [m⁻³] (paper §2.2.2: 200 L⁻¹)."""
-const N_I_MAX = 200.0e3
-
-"""Heterogeneous freezing temperature limit [K] (paper §2.2.2)."""
-const TLIMHETFREEZE = 258.15
-
-"""
-    sb3_mean_ice_mass(q_ice, n_ice)
-
-Mean cloud-ice particle mass [kg], `q/n`, clamped to SB3's bounds.
-
-Both arguments are per unit *mass*: `sv007` is a specific number.
-"""
-sb3_mean_ice_mass(qi::FT, Ni::FT; x_min::FT = FT(SB3_ICE_PARAMS.x_min), x_max::FT = FT(SB3_ICE_PARAMS.x_max)) where {FT} = clamp(qi / Ni, x_min, x_max)
-sb3_mean_ice_mass(qi::FT, Ni::FT, p::NamedTuple) where {FT} = sb3_mean_ice_mass(qi, Ni; x_min = FT(p.x_min), x_max = FT(p.x_max))
-
-"""Mean cloud-ice diameter [m] from the mean particle mass `x` [kg], `D = a x^b`."""
-sb3_ice_diameter(x::FT; a::FT = FT(SB3_ICE_PARAMS.a), b::FT = FT(SB3_ICE_PARAMS.b)) where {FT} = a * x^b
-sb3_ice_diameter(x::FT, p::NamedTuple) where {FT} = sb3_ice_diameter(x; a = FT(p.a), b = FT(p.b))
-
-"""Mean cloud-ice fall speed [m/s] from the mean particle mass `x` [kg] and air density."""
-sb3_ice_fall_speed(x::FT, ρ::FT; α::FT = FT(SB3_ICE_PARAMS.α), β::FT = FT(SB3_ICE_PARAMS.β), γ::FT = FT(SB3_ICE_PARAMS.γ), ρ_ref::FT = FT(SB3_ICE_PARAMS.ρ_ref)) where {FT} = α * x^β * (ρ_ref / ρ)^γ
-sb3_ice_fall_speed(x::FT, ρ::FT, p::NamedTuple) where {FT} = sb3_ice_fall_speed(x, ρ; α = FT(p.α), β = FT(p.β), γ = FT(p.γ), ρ_ref = FT(p.ρ_ref))
 
 """
     dales_tke_seed(z::FT; e12_min::FT = FT(DALES_CONSTANTS.e12_min), decay_length::FT = FT(50)) where {FT}

@@ -9,7 +9,8 @@ Test.@testset "fielddump tiles stitch onto the global grid" begin
         fd = MA.open_fielddump(dir)
         try
             Test.@test fd.tiles == f.n_tiles
-            Test.@test sort(collect(keys(fd.vars))) == ["n_rain", "thl", "v", "w"]
+            Test.@test sort(collect(keys(fd.vars))) ==
+                       ["n_rain", "ql", "qt", "thl", "v", "w"]
 
             # the staggered axes survive: each variable keeps the axis it is stored on
             Test.@test fd.dims["thl"] == ("xt", "yt", "zt", "time")
@@ -62,7 +63,8 @@ Test.@testset "load_fielddump selects, and matches the lazy read" begin
     mktempdir() do dir
         f = write_fielddump_tiles(dir)
         all_vars = MA.load_fielddump(dir)
-        Test.@test sort(collect(keys(all_vars.fields))) == ["n_rain", "thl", "v", "w"]
+        Test.@test sort(collect(keys(all_vars.fields))) ==
+                   ["n_rain", "ql", "qt", "thl", "v", "w"]
         Test.@test all_vars.fields["thl"] == f.expected["thl"]
 
         one = MA.load_fielddump(dir; vars = ["thl"], time_indices = 1:1)

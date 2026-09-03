@@ -20,15 +20,20 @@ function write_fielddump_tiles(
 )
     ny = ny_per_tile * n_tiles
     point(v, i, j, k, t) = Float32(v * 1.0f6 + i * 1.0f4 + j * 1.0f2 + k * 1.0f0 + t * 0.1f0)
+    # `point` packs a point's own coordinates into its value, so a misplaced tile cannot
+    # match. The trailing factor scales that encoding into the variable's real range: the
+    # humidities land near 5e-3 and 6e-4 kg/kg, so `ql < qt` and the vapour stays positive.
     layout = (
-        ("thl", ("xt", "yt", "zt", "time"), "K", 1),
-        ("v", ("xt", "ym", "zt", "time"), "m/s", 2),
-        ("w", ("xt", "yt", "zm", "time"), "m/s", 3),
-        ("sv001", ("xt", "yt", "zt", "time"), "(kg/kg)", 4),
+        ("thl", ("xt", "yt", "zt", "time"), "K", 1, 1.0f0),
+        ("v", ("xt", "ym", "zt", "time"), "m/s", 2, 1.0f0),
+        ("w", ("xt", "yt", "zm", "time"), "m/s", 3, 1.0f0),
+        ("sv001", ("xt", "yt", "zt", "time"), "(kg/kg)", 4, 1.0f0),
+        ("qt", ("xt", "yt", "zt", "time"), "1e-5kg/kg", 5, 1.0f-9),
+        ("ql", ("xt", "yt", "zt", "time"), "1e-5kg/kg", 6, 1.0f-10),
     )
     expected = Dict(
-        name => [point(v, i, j, k, t) for i in 1:nx, j in 1:ny, k in 1:nz, t in 1:nt]
-        for (name, _, _, v) in layout
+        name => [point(v, i, j, k, t) * s for i in 1:nx, j in 1:ny, k in 1:nz, t in 1:nt]
+        for (name, _, _, v, s) in layout
     )
 
     for tile in 0:(n_tiles - 1)
@@ -50,8 +55,8 @@ function write_fielddump_tiles(
             )
                 NC.defVar(ds, axis, collect(values), (axis,))
             end
-            for (name, dims, units, v) in layout
-                a = [point(v, i, j, k, t) for i in 1:nx, j in js, k in 1:nz, t in 1:nt]
+            for (name, dims, units, v, s) in layout
+                a = [point(v, i, j, k, t) * s for i in 1:nx, j in js, k in 1:nz, t in 1:nt]
                 NC.defVar(ds, name, a, dims; attrib = ["units" => units])
             end
         end

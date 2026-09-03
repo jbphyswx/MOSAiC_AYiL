@@ -38,9 +38,11 @@ Read from `scm_in` time record 1, one value per day. Longitude is wrapped to [-1
 | [`MOSAiCAYiL.ps`](@ref), [`MOSAiCAYiL.open_sst`](@ref) | surface pressure, open-water SST |
 | [`MOSAiCAYiL.n_ccn`](@ref) | CCN number, uniform in z on every day |
 
-These are the values DALES used. The namelist's `xlat`, `xlon`, `z0mav`, `z0hav` and
-`albedoav` are placeholders it overwrote every step — see
-[What the reference runs did](archive.md).
+These are the values DALES used. The namelist's `xlat`, `xlon`, `z0mav`, `z0hav`, `albedoav`,
+`seaicefrct`, `ps` and `thls` are placeholders it overwrote every substep — see
+[What the reference runs did](archive.md). [`MOSAiCAYiL.xday`](@ref) is the day of year the
+insolation used, and [`MOSAiCAYiL.surface_pottemp`](@ref) is the skin potential temperature
+DALES carries as `thls`.
 
 ## The day's metadata
 

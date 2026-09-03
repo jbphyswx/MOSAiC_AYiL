@@ -103,7 +103,9 @@ samptend_path(date; kwargs...) =
 namoptions_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "namoptions")
 
 # The other six files of a day directory. DALES's plain-text inputs and its text copies of
-# `tmser`; `prof.inp.001` is unused by these runs, `ltestbed` taking the `scm_in` branch.
+# `tmser`. `prof.inp.001` column 1 is the vertical grid every run used
+# (`modglobal.f90:411-419`); only its five profile columns are unused, `ltestbed` taking the
+# `scm_in` branch.
 
 prof_inp_path(date; kwargs...) = joinpath(day_dir(date; kwargs...), "prof.inp.001")
 

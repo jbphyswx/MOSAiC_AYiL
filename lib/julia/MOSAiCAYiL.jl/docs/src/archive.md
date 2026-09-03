@@ -34,14 +34,43 @@ centred `∂θ_l/∂z` on 100–5000 m, with liquid-only `θ_l`.
 
 ## Namelist values DALES overwrote
 
-On all 190 days the namelist writes `xlat = 78.41`, `xlon = 8.47`, `z0mav`, `z0hav` and
-`albedoav`. DALES replaces all five every step from `scm_in` (`modtimedep.f90`), so they
-describe nothing the runs did. The per-day values are in the day-scalar table — see
-[Facts with no I/O](facts.md).
+On all 190 days the namelist writes `xlat = 78.41`, `xlon = 8.47`, `z0mav`, `z0hav`,
+`albedoav`, `seaicefrct`, `ps = 100805.48` and `thls = 278.61`. DALES replaces all eight every
+substep from `scm_in` (`modtimedep.f90:206-208`, `:522-538`), so they describe nothing the runs
+did. The per-day values are in the day-scalar table — see [Facts with no I/O](facts.md).
+
+`ps` and `thls` are the two that read most plausibly and are most wrong: on 2020-05-03 the
+namelist's `ps` is 100805.48 Pa against the day's 101772.62, and `thls` is a **potential**
+temperature — `modtestbed.f90:574-578` divides the `scm_in` skin temperature by `Π(p_s)` — so
+278.61 stands against `surface_pottemp` of 257.48. [`MOSAiCAYiL.namelist_value`](@ref) refuses
+all eight and names the accessor that supersedes each.
+
+`xday` is the only namelist key that varies between days, and it equals `Dates.dayofyear` on
+190/190, so [`MOSAiCAYiL.xday`](@ref) needs no file.
 
 The nudging entries are the opposite case: `tb_taunudge = 10800`, `tb_zmidnudge = 300` and
 `tb_zminnudge = -1` are what ran, on 190/190 days. `tb_minzinv`/`tb_maxzinv` are Fortran
 defaults (100 m, 5000 m) and appear in no namelist.
+
+## The clear-sky radiation was never written
+
+`tmser.001.nc` declares `SW_up_ca_TOA`, `SW_dn_ca_TOA`, `LW_up_ca_TOA` and `LW_dn_ca_TOA`,
+and all four hold zero on every day. No cloud radiative effect can be formed from this
+archive: differencing the all-sky flux against them returns the all-sky flux.
+
+`LW_dn_TOA` is zero for a physical reason rather than a missing diagnostic, and both
+shortwave fields are zero through the polar night. `SW_dn_TOA` is stored negative.
+[`MOSAiCAYiL.toa_radiation`](@ref) returns the three that carry data.
+
+## One day ships a fielddump
+
+`20191101` carries `fielddump.000.000.001.nc`, one MPI rank's slab — `xt = 320` by `yt = 4` by
+`zt = 200`, four records from 1800 s to 7200 s, holding all twelve SB3 scalars alongside
+`thl`, `qt`, `ql`, the winds and `buoy`. No other day has one.
+
+Four rows of 320 is 1.25 % of the domain, so a mean over it samples the slab mean
+`profiles.001.nc` reports rather than reproducing it.
+
 
 ## Where the archive contradicts its own labels
 
