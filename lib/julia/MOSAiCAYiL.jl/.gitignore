@@ -40,6 +40,9 @@ Manifest*.toml
 *.jld2
 *.dat
 
+# the docs figures are checked in; the README and index.md link to them
+!docs/src/assets/*.png
+
 
 # misc
 .DS_Store
