@@ -58,7 +58,7 @@ function dales_slab_column(
             pressure_fromztop(ps[k], θ[:, k], q_tot[:, k], q_liq[:, k], z; backend).presf
     end
     Π = exner.(backend, presf)
-    T = temperature_from_liquid_ice_pottemp.(backend, θ_l, presf, q_liq)
+    T = temperature_from_liquid_pottemp.(backend, θ_l, presf, q_liq)
 
     return (;
         z, time = t, ps, presh, presf, exner = Π, rhof,

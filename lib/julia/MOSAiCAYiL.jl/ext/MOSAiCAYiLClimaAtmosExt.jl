@@ -667,7 +667,7 @@ const CLIMAATMOS_FROM_DALES =
         # `ql` and not the SB3 cloud-liquid scalar `sv005`: the thermodynamic liquid DALES's
         # saturation adjustment produced is what its θ_l carries.
         "ta" => (
-            f = read -> MOSAiCAYiL.temperature_from_liquid_ice_pottemp.(
+            f = read -> MOSAiCAYiL.temperature_from_liquid_pottemp.(
                 MOSAiCAYiL.DefaultThermodynamicsBackend(),
                 read("thl"),
                 MOSAiCAYiL.pressure_from_face(

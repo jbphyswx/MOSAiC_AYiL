@@ -44,15 +44,19 @@ function equilibrium_condensate end
 function air_density end
 """Virtual temperature [K]."""
 function virtual_temperature end
+"""Liquid water potential temperature [K]."""
+function liquid_pottemp end
 """Liquid-ice potential temperature [K]."""
 function liquid_ice_pottemp end
 """Dry potential temperature [K]."""
 function dry_pottemp end
 """Exner function `(p/p_ref)^(R_d/c_p)`."""
 function exner end
-"""Temperature [K] from the liquid-ice potential temperature and the liquid content."""
+"""Temperature [K] from the liquid water potential temperature and the liquid."""
+function temperature_from_liquid_pottemp end
+"""Temperature [K] from the liquid-ice potential temperature and the condensate."""
 function temperature_from_liquid_ice_pottemp end
-"""Saturation adjustment from `(p, θ_liq_ice, q_tot)` → `(T, q_liq, q_ice)`."""
+"""Saturation adjustment from `(p, θ_l, q_tot)` → `(T, q_liq, q_ice)`."""
 function saturation_adjust_pθq end
 """Saturation specific humidity over liquid."""
 function q_vap_saturation_liq end
@@ -338,22 +342,42 @@ end
     T / exner(b, p)
 
 """
-    liquid_ice_pottemp(backend, T, p, q_liq)
+    liquid_pottemp(backend, T, p, q_liq)
 
-`θ_l = (T − (L_v/c_p) q_l) / Π` — DALES's liquid-only θ_l (`modtestbed.f90:701-702`; the
-ice-inclusive variant at `:712-714` is commented out).
+`θ_l = (T − (L_v/c_p) q_l) / Π`, the archive's `thl` (`modtestbed.f90:701-702`).
 """
-@inline liquid_ice_pottemp(b::DefaultThermodynamicsBackend, T::FT, p::FT, q_liq::FT) where {FT} =
-    (T - (L_v0(b, FT) / cp_d(b, FT)) * q_liq) / exner(b, p)
+@inline liquid_pottemp(
+    b::DefaultThermodynamicsBackend, T::FT, p::FT, q_liq::FT,
+) where {FT} = (T - (L_v0(b, FT) / cp_d(b, FT)) * q_liq) / exner(b, p)
 
 """
-    temperature_from_liquid_ice_pottemp(backend, θ_l, p, q_liq)
+    temperature_from_liquid_pottemp(backend, θ_l, p, q_liq)
 
-The inverse of [`liquid_ice_pottemp`](@ref): `T = Π θ_l + (L_v/c_p) q_l`.
+The inverse of [`liquid_pottemp`](@ref): `T = Π θ_l + (L_v/c_p) q_l`.
 """
-@inline temperature_from_liquid_ice_pottemp(
+@inline temperature_from_liquid_pottemp(
     b::DefaultThermodynamicsBackend, θ_l::FT, p::FT, q_liq::FT,
 ) where {FT} = exner(b, p) * θ_l + (L_v0(b, FT) / cp_d(b, FT)) * q_liq
+
+"""
+    liquid_ice_pottemp(backend, T, p, q_liq, q_ice)
+
+`θ_li = (T − (L_v q_l + L_s q_i)/c_p) / Π`.
+"""
+@inline liquid_ice_pottemp(
+    b::DefaultThermodynamicsBackend, T::FT, p::FT, q_liq::FT, q_ice::FT,
+) where {FT} =
+    (T - (L_v0(b, FT) * q_liq + L_s0(b, FT) * q_ice) / cp_d(b, FT)) / exner(b, p)
+
+"""
+    temperature_from_liquid_ice_pottemp(backend, θ_li, p, q_liq, q_ice)
+
+The inverse of [`liquid_ice_pottemp`](@ref): `T = Π θ_li + (L_v q_l + L_s q_i)/c_p`.
+"""
+@inline temperature_from_liquid_ice_pottemp(
+    b::DefaultThermodynamicsBackend, θ_li::FT, p::FT, q_liq::FT, q_ice::FT,
+) where {FT} =
+    exner(b, p) * θ_li + (L_v0(b, FT) * q_liq + L_s0(b, FT) * q_ice) / cp_d(b, FT)
 
 @inline function virtual_temperature(
     b::DefaultThermodynamicsBackend, T::FT, q_tot::FT, q_liq::FT, q_ice::FT;
@@ -380,7 +404,7 @@ end
 end
 
 """
-    saturation_adjust_pθq(backend, p, θ_liq_ice, q_tot; λ, maxiter, tol, probe)
+    saturation_adjust_pθq(backend, p, θ_l, q_tot; λ, maxiter, tol, probe)
 
 `(T, q_liq, q_ice)` consistent with `(p, θ_l, q_tot)`.
 
@@ -394,7 +418,7 @@ liquid, ice being carried separately (`qsatur = qvsl1`, `:506`). DALES stops at 
 `T`; `tol` here is tighter, on the same equations.
 """
 function saturation_adjust_pθq(
-    b::DefaultThermodynamicsBackend, p::FT, θ_liq_ice::FT, q_tot::FT;
+    b::DefaultThermodynamicsBackend, p::FT, θ_l::FT, q_tot::FT;
     λ::FT = FT(1), maxiter::Int = 100, tol::FT = FT(1e-6), probe::FT = FT(2e-3),
 ) where {FT}
     ε = molmass_ratio(b, FT)
@@ -402,9 +426,9 @@ function saturation_adjust_pθq(
         let (; q_liq, q_ice) = equilibrium_condensate(b, t, p, q_tot; ε, λ)
             q_liq + q_ice
         end
-    θ_of(t) = liquid_ice_pottemp(b, t, p, condensate(t))
+    θ_of(t) = liquid_pottemp(b, t, p, condensate(t))
 
-    T = exner(b, p) * θ_liq_ice
+    T = exner(b, p) * θ_l
     if condensate(T) > zero(FT)
         T_old = T + 2 * tol
         iter = 0
@@ -413,7 +437,7 @@ function saturation_adjust_pθq(
             T_old = T
             slope = (θ_of(T) - θ_of(T - probe)) / probe
             slope == zero(FT) && break
-            T -= (θ_of(T) - θ_liq_ice) / slope
+            T -= (θ_of(T) - θ_l) / slope
         end
     end
     (; q_liq, q_ice) = equilibrium_condensate(b, T, p, q_tot; ε, λ)

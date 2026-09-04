@@ -103,8 +103,8 @@ end
 Test.@testset "exner and the potential temperatures invert" begin
     Test.@test MA.exner(B, MA.p_ref(B)) == 1.0
     for p in (1.0e5, 9.0e4, 5.0e4), θ_l in (250.0, 270.0, 290.0), q_l in (0.0, 1.0e-4)
-        T = MA.temperature_from_liquid_ice_pottemp(B, θ_l, p, q_l)
-        Test.@test MA.liquid_ice_pottemp(B, T, p, q_l) ≈ θ_l
+        T = MA.temperature_from_liquid_pottemp(B, θ_l, p, q_l)
+        Test.@test MA.liquid_pottemp(B, T, p, q_l) ≈ θ_l
         # liquid warms the temperature relative to the dry relation
         q_l == 0 ? Test.@test(T == MA.exner(B, p) * θ_l) :
                    Test.@test(T > MA.exner(B, p) * θ_l)
@@ -118,7 +118,7 @@ Test.@testset "saturation adjustment closes the round trip" begin
         q_tot in (0.0, 1.0e-4, 2.0e-3, 1.0e-2)
 
         (; T, q_liq, q_ice) = MA.saturation_adjust_pθq(B, p, θ_l, q_tot)
-        back = MA.liquid_ice_pottemp(B, T, p, q_liq + q_ice)
+        back = MA.liquid_pottemp(B, T, p, q_liq + q_ice)
         worst = max(worst, abs(back - θ_l))
         Test.@test q_liq >= 0
         Test.@test q_ice >= 0

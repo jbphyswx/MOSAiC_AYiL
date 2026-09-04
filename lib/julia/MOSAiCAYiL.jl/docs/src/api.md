@@ -239,7 +239,9 @@ equilibrium_condensate
 saturation_adjust_pθq
 exner
 dry_pottemp
+liquid_pottemp
 liquid_ice_pottemp
+temperature_from_liquid_pottemp
 temperature_from_liquid_ice_pottemp
 virtual_temperature
 air_density

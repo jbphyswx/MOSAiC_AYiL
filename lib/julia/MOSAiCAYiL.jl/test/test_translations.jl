@@ -94,10 +94,10 @@ Test.@testset "centre pressure / temperature on synthetic columns" begin
     Test.@test all(p .< p_face)
     θ_l = [270.0, 271.0]
     q_l = [0.0, 1.0e-4]
-    T = MA.temperature_from_liquid_ice_pottemp.(b, θ_l, p, q_l)
+    T = MA.temperature_from_liquid_pottemp.(b, θ_l, p, q_l)
     Test.@test all(isfinite, T)
     Test.@test T[2] > MA.exner(b, p[2]) * θ_l[2]        # liquid warms θ_l → T
     Test.@test T[1] ≈ MA.exner(b, p[1]) * θ_l[1]        # no liquid, no warming
     # the inverse recovers θ_l
-    Test.@test MA.liquid_ice_pottemp.(b, T, p, q_l) ≈ θ_l
+    Test.@test MA.liquid_pottemp.(b, T, p, q_l) ≈ θ_l
 end

@@ -67,8 +67,8 @@ The surface form drops the `(1−ε)e` term the interior keeps
 
 ```@example thermo
 p, θ_l, q_liq = 9.0e4, 268.0, 1.0e-4
-T = MA.temperature_from_liquid_ice_pottemp(b, θ_l, p, q_liq)
-T, MA.liquid_ice_pottemp(b, T, p, q_liq)
+T = MA.temperature_from_liquid_pottemp(b, θ_l, p, q_liq)
+T, MA.liquid_pottemp(b, T, p, q_liq)
 ```
 
 [`saturation_adjust_pθq`](@ref) solves `(p, θ_l, q_tot)` for `(T, q_liq, q_ice)`:

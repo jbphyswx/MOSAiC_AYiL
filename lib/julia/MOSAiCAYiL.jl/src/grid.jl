@@ -300,8 +300,8 @@ of DALES's `fromztop` (`modthermodynamics.f90:321-384`), which is how the archiv
 was formed.
 
 `θ` is the **dry** potential temperature on the full levels, DALES's `th0av`, which it forms
-from the liquid-ice one as `θ = θ_l + (L_v/c_p) q_l / Π` (`:263`). Passing `θ_l` instead is
-wrong wherever there is liquid. `q_tot` and `q_liq` are the domain means beside it, and `zf`
+as `θ = θ_l + (L_v/c_p) q_l / Π` (`:263`). Passing `θ_l` instead is wrong wherever there is
+liquid. `q_tot` and `q_liq` are the domain means beside it, and `zf`
 is the full-level height array [`vertical_metrics`](@ref) is built from.
 
 The two are different quantities and neither substitutes for the other: `presf` steps

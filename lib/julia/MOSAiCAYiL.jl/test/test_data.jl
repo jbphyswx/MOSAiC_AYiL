@@ -51,7 +51,7 @@ Test.@testset "fromztop reproduces the archive's own pressure" begin
     # the adjustment closes on every level of a real column
     for k in eachindex(c.z)
         (; T, q_liq, q_ice) = MA.saturation_adjust_pθq(b, presf[k], thl[k], qt[k])
-        Test.@test MA.liquid_ice_pottemp(b, T, presf[k], q_liq + q_ice) ≈ thl[k] atol = 1.0e-6
+        Test.@test MA.liquid_pottemp(b, T, presf[k], q_liq + q_ice) ≈ thl[k] atol = 1.0e-6
     end
 end
 
