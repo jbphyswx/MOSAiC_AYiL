@@ -31,9 +31,7 @@ function ice_fields(
     time_inds = 2:12,
     q_min = zero(FT),
 ) where {FT}
-    path = les_profiles_path(date; root)
-    isfile(path) || error("No DALES output at $path")
-    z, ρ, q_liq, q_ice, n_ice = NC.NCDataset(path, "r") do ds
+    z, ρ, q_liq, q_ice, n_ice = open_archive(:profiles, date; root) do ds
         (
             FT.(vec(Array(ds["zt"]))),
             FT.(_read_oriented(ds, "rhof")),
@@ -45,9 +43,22 @@ function ice_fields(
     # `ice_rate` is DALES's `sed_q/ρ` — a mixing ratio times a fall speed, despite
     # the raw file labelling it kg/m2 — so dividing out the mixing ratio leaves the
     # mass-weighted fall speed the reference actually realized.
-    ice_rate = NC.NCDataset(mphys_path(date; root), "r") do ds
+    ice_rate = open_archive(:mphys, date; root) do ds
         FT.(_read_oriented(ds, "ice_rate"))
     end::Matrix{FT}
+    return ice_fields(; z, ρ, q_liq, q_ice, n_ice, ice_rate, time_inds, q_min)
+end
+
+function ice_fields(;
+    z::AbstractVector,
+    ρ::AbstractMatrix,
+    q_liq::AbstractMatrix,
+    q_ice::AbstractMatrix,
+    n_ice::AbstractMatrix,
+    ice_rate::AbstractMatrix,
+    time_inds = 2:12,
+    q_min = zero(nonmissingtype(eltype(q_ice))),
+)
     at(a) = view(a, :, time_inds)
     qi, ni, ql, ρi, rate = at(q_ice), at(n_ice), at(q_liq), at(ρ), at(ice_rate)
     present = (qi .> q_min) .& isfinite.(qi) .& isfinite.(ni)

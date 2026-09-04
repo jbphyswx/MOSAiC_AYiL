@@ -47,6 +47,7 @@ namelist_longitude
 
 ```@docs
 read_variable
+open_archive
 ρ_power
 variable_product
 physical_name
@@ -56,6 +57,7 @@ mphys_name
 samptend_name
 testbed_forcing
 dales_slab_column
+dales_rhof
 les_density
 les_faces
 scm_in_air_density

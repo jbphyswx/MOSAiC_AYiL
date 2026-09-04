@@ -164,8 +164,15 @@ surface pressure and skin temperature and then re-reads it unconditionally
 function read_baseprof(date; root = data_root())
     path = baseprof_inp_path(date; root)
     isfile(path) || error("No baseprof.inp.001 at $path")
+    return read_baseprof(eachline(path); source = path)
+end
+
+function read_baseprof(
+    lines::Union{Base.EachLine, AbstractVector{<:AbstractString}};
+    source = "the given lines",
+)
     z, rhobf = Float64[], Float64[]
-    for (i, line) in enumerate(eachline(path))
+    for (i, line) in enumerate(lines)
         i <= 2 && continue
         stripped = strip(line)
         isempty(stripped) && continue
@@ -174,6 +181,6 @@ function read_baseprof(date; root = data_root())
         push!(z, parse(Float64, parts[1]))
         push!(rhobf, parse(Float64, parts[2]))
     end
-    isempty(rhobf) && error("Parsed no rows from $path")
+    isempty(rhobf) && error("Parsed no rows from $source")
     return (; z, rhobf)
 end

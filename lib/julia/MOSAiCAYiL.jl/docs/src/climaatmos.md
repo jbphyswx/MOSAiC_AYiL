@@ -15,11 +15,16 @@ using MOSAiCAYiL: MOSAiCAYiL as MA
 c = MA.case("20200503")
 FT = Float64
 
+fd = MA.testbed_forcing(c)          # read scm_in once and hand it to each constructor
+
 params  = MA.ClimaAtmos_MOSAiCAYiL_params(FT, c)
-forcing = MA.ClimaAtmosMOSAiCAYiLForcing(FT, c)
-setup   = MA.ClimaAtmosMOSAiCAYiLSetup(FT, c)
+forcing = MA.ClimaAtmosMOSAiCAYiLForcing(FT, c; forcing = fd)
+setup   = MA.ClimaAtmosMOSAiCAYiLSetup(FT, c; forcing_data = fd)
 grid    = MA.ClimaAtmos_MOSAiCAYiL_grid(FT)
 ```
+
+Each of these defaults to reading `scm_in` itself, so building all three without `fd` reads
+the same file three times.
 
 ## The grid
 

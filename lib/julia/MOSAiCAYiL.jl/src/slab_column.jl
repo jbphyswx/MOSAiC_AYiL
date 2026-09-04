@@ -28,26 +28,44 @@ function dales_slab_column(
     root = data_root(),
     backend = DefaultThermodynamicsBackend(),
 ) where {FT}
-    path = les_profiles_path(date; root)
-    isfile(path) || error("No DALES output at $path")
-    z, t, presh, rhof, θ_l, θ_v, q_tot, q_liq, u, v = NC.NCDataset(path, "r") do ds
-        (
-            FT.(vec(Array(ds["zt"]))),
-            FT.(vec(Array(NC.variable(ds, "time")))),
-            FT.(_read_oriented(ds, "presh")),
-            FT.(_read_oriented(ds, "rhof")),
-            FT.(_read_oriented(ds, "thl")),
-            FT.(_read_oriented(ds, "thv")),
-            FT.(_read_oriented(ds, "qt")),
-            FT.(_read_oriented(ds, "ql")),
-            FT.(_read_oriented(ds, "u")),
-            FT.(_read_oriented(ds, "v")),
-        )
-    end::Tuple{
-        Vector{FT}, Vector{FT}, Matrix{FT}, Matrix{FT}, Matrix{FT},
-        Matrix{FT}, Matrix{FT}, Matrix{FT}, Matrix{FT}, Matrix{FT},
-    }
+    return open_archive(:profiles, date; root) do ds
+        dales_slab_column(ds, FT; backend)
+    end
+end
 
+function dales_slab_column(
+    ds::NC.NCDataset,
+    ::Type{FT} = Float32;
+    backend = DefaultThermodynamicsBackend(),
+) where {FT}
+    return dales_slab_column(;
+        z = FT.(vec(Array(ds["zt"]))),
+        time = FT.(vec(Array(NC.variable(ds, "time")))),
+        presh = FT.(_read_oriented(ds, "presh")),
+        rhof = FT.(_read_oriented(ds, "rhof")),
+        θ_l = FT.(_read_oriented(ds, "thl")),
+        θ_v = FT.(_read_oriented(ds, "thv")),
+        q_tot = FT.(_read_oriented(ds, "qt")),
+        q_liq = FT.(_read_oriented(ds, "ql")),
+        u = FT.(_read_oriented(ds, "u")),
+        v = FT.(_read_oriented(ds, "v")),
+        backend,
+    )
+end
+
+function dales_slab_column(;
+    z::AbstractVector{FT},
+    time::AbstractVector{FT},
+    presh::AbstractMatrix{FT},
+    rhof::AbstractMatrix{FT},
+    θ_l::AbstractMatrix{FT},
+    θ_v::AbstractMatrix{FT},
+    q_tot::AbstractMatrix{FT},
+    q_liq::AbstractMatrix{FT},
+    u::AbstractMatrix{FT},
+    v::AbstractMatrix{FT},
+    backend = DefaultThermodynamicsBackend(),
+) where {FT}
     rvord = R_v(backend, FT) / R_d(backend, FT)
     θ = θ_v ./ (one(FT) .+ (rvord - one(FT)) .* q_tot .- rvord .* q_liq)
 
@@ -61,10 +79,34 @@ function dales_slab_column(
     T = temperature_from_liquid_pottemp.(backend, θ_l, presf, q_liq)
 
     return (;
-        z, time = t, ps, presh, presf, exner = Π, rhof,
+        z, time, ps, presh, presf, exner = Π, rhof,
         θ, θ_l, θ_v, T, q_tot, q_liq, u, v,
     )
 end
 
 dales_slab_column(c::MOSAiCAYiLCase, ::Type{FT} = Float32; kwargs...) where {FT} =
     dales_slab_column(date_string(c), FT; kwargs...)
+
+"""
+    dales_rhof(date, [FT = Float32]; root = data_root())
+
+`(; z, time, rhof)`: the slab-mean air density [kg/m³] of every level and time,
+`profiles.001.nc`'s own `rhof`, on the axes it sits on.
+
+This is the density [`read_variable`](@ref) converts a per-mass number with, and the
+`rhof` of [`dales_slab_column`](@ref) without the pressure and temperatures that column
+also derives. Not `rhobf` — that is [`anelastic_base_density`](@ref).
+"""
+dales_rhof(date, ::Type{FT} = Float32; root = data_root()) where {FT} =
+    open_archive(:profiles, date; root) do ds
+        dales_rhof(ds, FT)
+    end
+
+dales_rhof(ds::NC.NCDataset, ::Type{FT} = Float32) where {FT} = (;
+    z = FT.(vec(Array(ds["zt"]))),
+    time = FT.(vec(Array(NC.variable(ds, "time")))),
+    rhof = FT.(_read_oriented(ds, "rhof")),
+)
+
+dales_rhof(c::MOSAiCAYiLCase, ::Type{FT} = Float32; kwargs...) where {FT} =
+    dales_rhof(date_string(c), FT; kwargs...)

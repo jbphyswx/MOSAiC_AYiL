@@ -52,14 +52,13 @@ const RADIATION_GASES = (
 
 # `read (66,'(300(6E12.4,/))')` spreads a record over as many lines as it needs and consumes a
 # trailing newline, so a numeric record is taken by count rather than by line.
-function _ckd_reader(path::AbstractString)
-    lines = readlines(path)
+function _ckd_reader(lines::AbstractVector{<:AbstractString}, source)
     cursor = Ref(1)
     function next_line()
         while cursor[] <= length(lines) && isempty(strip(lines[cursor[]]))
             cursor[] += 1
         end
-        cursor[] <= length(lines) || error("$path ended early.")
+        cursor[] <= length(lines) || error("$source ended early.")
         line = lines[cursor[]]
         cursor[] += 1
         return line
@@ -70,7 +69,7 @@ function _ckd_reader(path::AbstractString)
             append!(out, parse.(Float64, split(strip(next_line()))))
         end
         length(out) == n ||
-            error("Wanted $n values from $path and the record held $(length(out)).")
+            error("Wanted $n values from $source and the record held $(length(out)).")
         return out
     end
     return (; next_line, reals, integers = () -> parse.(Int, split(strip(next_line()))))
@@ -93,7 +92,13 @@ this package computes radiation. [`RADIATION_BANDS`](@ref),
 function read_ckd(date; root = data_root())
     path = ckd_inp_path(date; root)
     isfile(path) || error("No ckd.inp.001 at $path")
-    (; next_line, reals, integers) = _ckd_reader(path)
+    return read_ckd(readlines(path); source = path)
+end
+
+function read_ckd(
+    lines::AbstractVector{<:AbstractString}; source = "the given lines",
+)
+    (; next_line, reals, integers) = _ckd_reader(lines, source)
 
     nbands, ngases = integers()
     edge = reals(nbands + 1)

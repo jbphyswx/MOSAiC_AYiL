@@ -35,74 +35,75 @@ every shipped day.
 (`modtestbed.f90:739-741`): vapour-only `T_v = T(1 + 0.61 q)`, DALES `R_d` and `g`.
 Surface fluxes that are netCDF fill become `missing`.
 """
-function testbed_forcing(date; root = data_root(), time_index::Int = 1)
-    path = scm_in_path(date; root)
-    isfile(path) || error("No testbed forcing at $path")
-    return NC.NCDataset(path, "r") do ds
-        column(name) = read_variable(ds, name; file = :scm_in).data
-        prof(name) = column(name)[:, time_index]
-        scalar(name) = column(name)[time_index]
-        function optional(name)
-            v = scalar(name)
-            return _is_fill(v) ? missing : v
-        end
-
-        z = prof("height_f")
-
-        ta = prof("t_local")
-        q = prof("q_local")
-        ql = prof("ql_local")
-        qi = prof("qi_local")
-        hus = q .+ ql .+ qi
-        p = prof("pressure_f")
-
-        FT = eltype(ta)
-        grav = FT(DALES_CONSTANTS.grav)
-        R_d = FT(DALES_CONSTANTS.R_d)
-        Tv = ta .* (1 .+ FT(0.61) .* q)
-        wa = .-prof("omega") .* (R_d .* Tv) ./ (p .* grav)
-
-        surface = (;
-            ps = scalar("ps"),
-            trajectory_latitude = scalar("lat"),
-            trajectory_longitude = mod(scalar("lon") + 180, 360) - 180,
-            albedo = scalar("albedo"),
-            albedo_snow = scalar("albedo_snow"),
-            snow = scalar("snow"),
-            z0_momentum = scalar("mom_rough"),
-            z0_heat = scalar("heat_rough"),
-            sea_ice_fraction = scalar("sea_ice_frct"),
-            t_skin = scalar("t_skin"),
-            t_skin_ocean = scalar("t_skin_ocean"),
-            t_skin_seaice = scalar("t_skin_seaice"),
-            open_sst = scalar("open_sst"),
-            land_sea_mask = scalar("lsm"),
-            sensible_heat_flux = optional("sfc_sens_flx"),
-            latent_heat_flux = optional("sfc_lat_flx"),
-        )
-
-        (;
-            z,
-            ta,
-            hus,
-            q,
-            ql,
-            qi,
-            ua = prof("u_local"),
-            va = prof("v_local"),
-            p,
-            o3 = prof("o3"),
-            n_ccn = prof("n_ccn"),
-            wa,
-            tntha = prof("tadv"),
-            tnhusha = prof("qadv") .+ prof("ladv") .+ prof("iadv"),
-            tnua = prof("uadv"),
-            tnva = prof("vadv"),
-            ug = prof("ug"),
-            vg = prof("vg"),
-            surface,
-        )
+testbed_forcing(date; root = data_root(), time_index::Int = 1) =
+    open_archive(:scm_in, date; root) do ds
+        testbed_forcing(ds; time_index)
     end
+
+function testbed_forcing(ds::NC.NCDataset; time_index::Int = 1)
+    column(name) = read_variable(ds, name; file = :scm_in).data
+    prof(name) = column(name)[:, time_index]
+    scalar(name) = column(name)[time_index]
+    function optional(name)
+        v = scalar(name)
+        return _is_fill(v) ? missing : v
+    end
+
+    z = prof("height_f")
+
+    ta = prof("t_local")
+    q = prof("q_local")
+    ql = prof("ql_local")
+    qi = prof("qi_local")
+    hus = q .+ ql .+ qi
+    p = prof("pressure_f")
+
+    FT = eltype(ta)
+    grav = FT(DALES_CONSTANTS.grav)
+    R_d = FT(DALES_CONSTANTS.R_d)
+    Tv = ta .* (1 .+ FT(0.61) .* q)
+    wa = .-prof("omega") .* (R_d .* Tv) ./ (p .* grav)
+
+    surface = (;
+        ps = scalar("ps"),
+        trajectory_latitude = scalar("lat"),
+        trajectory_longitude = mod(scalar("lon") + 180, 360) - 180,
+        albedo = scalar("albedo"),
+        albedo_snow = scalar("albedo_snow"),
+        snow = scalar("snow"),
+        z0_momentum = scalar("mom_rough"),
+        z0_heat = scalar("heat_rough"),
+        sea_ice_fraction = scalar("sea_ice_frct"),
+        t_skin = scalar("t_skin"),
+        t_skin_ocean = scalar("t_skin_ocean"),
+        t_skin_seaice = scalar("t_skin_seaice"),
+        open_sst = scalar("open_sst"),
+        land_sea_mask = scalar("lsm"),
+        sensible_heat_flux = optional("sfc_sens_flx"),
+        latent_heat_flux = optional("sfc_lat_flx"),
+    )
+
+    (;
+        z,
+        ta,
+        hus,
+        q,
+        ql,
+        qi,
+        ua = prof("u_local"),
+        va = prof("v_local"),
+        p,
+        o3 = prof("o3"),
+        n_ccn = prof("n_ccn"),
+        wa,
+        tntha = prof("tadv"),
+        tnhusha = prof("qadv") .+ prof("ladv") .+ prof("iadv"),
+        tnua = prof("uadv"),
+        tnva = prof("vadv"),
+        ug = prof("ug"),
+        vg = prof("vg"),
+        surface,
+    )
 end
 
 testbed_forcing(c::MOSAiCAYiLCase; kwargs...) = testbed_forcing(date_string(c); kwargs...)
@@ -178,15 +179,15 @@ end
     les_density(date, [FT = Float32]; root = data_root(), time_index = 1)
 
 `(z, ρ)`: the DALES cell-centre heights [m] and the slab-mean air density
-[kg/m³] from `profiles.001.nc` `rhof`, one column of [`dales_slab_column`](@ref).
+[kg/m³] from `profiles.001.nc` `rhof`, one column of [`dales_rhof`](@ref).
 
 `time_index = 1` is t = 300 s, the earliest sample, not t = 0. Not `rhobf`/`rhobh`.
 """
 function les_density(
     date, ::Type{FT} = Float32; root = data_root(), time_index::Int = 1,
 ) where {FT}
-    c = dales_slab_column(date, FT; root)
-    return (c.z, c.rhof[:, time_index])
+    ρ = dales_rhof(date, FT; root)
+    return (ρ.z, ρ.rhof[:, time_index])
 end
 
 """
@@ -197,14 +198,16 @@ Pass `faces = nothing` to reconstruct from this day's `zm` + `zt`.
 """
 function les_faces(date; faces = LES_FACES, root = data_root())
     faces !== nothing && return faces
-    path = les_profiles_path(date; root)
-    isfile(path) || error("No DALES output at $path")
-    return NC.NCDataset(path, "r") do ds
-        zt = vec(Array(ds["zt"]))
-        zm = vec(Array(ds["zm"]))
-        return vcat(zm, 2 * last(zt) - last(zm))
+    return open_archive(:profiles, date; root) do ds
+        les_faces(ds)
     end
 end
+
+les_faces(ds::NC.NCDataset) =
+    les_faces(; zt = vec(Array(ds["zt"])), zm = vec(Array(ds["zm"])))
+
+les_faces(; zt::AbstractVector, zm::AbstractVector) =
+    vcat(zm, 2 * last(zt) - last(zm))
 
 """
     NamelistGroups
@@ -226,14 +229,21 @@ different values, `timeav` in five carrying two, `lstat` in two. Reach a value w
 function namelist(date; root = data_root())
     path = namoptions_path(date; root)
     isfile(path) || error("No namoptions at $path")
+    return namelist(eachline(path); source = path)
+end
+
+function namelist(
+    lines::Union{Base.EachLine, AbstractVector{<:AbstractString}};
+    source = "the given lines",
+)
     out = NamelistGroups()
     group = nothing
-    for line in eachline(path)
+    for line in lines
         stripped = strip(first(split(line, '!')))
         isempty(stripped) && continue
         if startswith(stripped, '&')
             group = Symbol(lowercase(stripped[(nextind(stripped, 1)):end]))
-            haskey(out, group) && error("`&$group` appears twice in $path")
+            haskey(out, group) && error("`&$group` appears twice in $source")
             out[group] = Dict{Symbol, String}()
             continue
         end
@@ -244,10 +254,10 @@ function namelist(date; root = data_root())
         parts = split(stripped, '=', limit = 2)
         length(parts) == 2 || continue
         isnothing(group) &&
-            error("`$(strip(parts[1]))` is outside any &group in $path")
+            error("`$(strip(parts[1]))` is outside any &group in $source")
         out[group][Symbol(lowercase(strip(parts[1])))] = String(strip(parts[2]))
     end
-    isempty(out) && error("Parsed no groups from $path")
+    isempty(out) && error("Parsed no groups from $source")
     return out
 end
 

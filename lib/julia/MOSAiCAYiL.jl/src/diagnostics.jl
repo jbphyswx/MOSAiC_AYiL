@@ -90,51 +90,92 @@ resolved eddies and are the larger at any level above the first.
 (`modtestbed.f90:572` divides by `c_p ρ` with no Exner), so it differs from `ρ c_p ⟨w'T'⟩` by
 `Π ≈ 1.005` at the surface.
 """
-function surface_fluxes(date; root = data_root(), resolved::Bool = false)
+surface_fluxes(date; root = data_root(), resolved::Bool = false) =
+    open_archive(:profiles, date; root) do ds
+        surface_fluxes(ds; resolved)
+    end
+
+function surface_fluxes(ds::NC.NCDataset; resolved::Bool = false)
     suffix = resolved ? "t" : "s"
-    raw(name) = read_variable(name, date; root, translate_units = false)
-    ρ = raw("rhof").data[1, :]
+    raw(name) = read_variable(ds, name; translate_units = false)
     wθ_l = raw("wthl" * suffix)
-    wq_t = raw("wqt" * suffix).data[1, :]
-    wθ_v = raw("wthv" * suffix).data[1, :]
-    c_p, L_v = DALES_CONSTANTS.cp_d, DALES_CONSTANTS.L_v
+    return surface_fluxes(;
+        time = wθ_l.time,
+        ρ = raw("rhof").data[1, :],
+        wθ_l = wθ_l.data[1, :],
+        wq_t = raw("wqt" * suffix).data[1, :],
+        wθ_v = raw("wthv" * suffix).data[1, :],
+    )
+end
+
+function surface_fluxes(;
+    time::AbstractVector,
+    ρ::AbstractVector,
+    wθ_l::AbstractVector,
+    wq_t::AbstractVector,
+    wθ_v::AbstractVector,
+    c_p = DALES_CONSTANTS.cp_d,
+    L_v = DALES_CONSTANTS.L_v,
+)
     return (;
-        wθ_l.time,
-        hfss = ρ .* c_p .* wθ_l.data[1, :],
+        time,
+        hfss = ρ .* c_p .* wθ_l,
         hfls = ρ .* L_v .* wq_t,
         buoyancy = ρ .* c_p .* wθ_v,
-        wθ_l = wθ_l.data[1, :],
+        wθ_l,
         wq_t,
         wθ_v,
     )
 end
 
+"""A total flux at or below this is too small to divide, and the resolved fraction is zero."""
+const FLUX_FRACTION_FLOOR = 1.0f-12
+
 """
-    flux_partition(name, date; root)
+    flux_partition(name, date; root, floor)
 
 A flux split into its resolved and subfilter parts, as `(; z, time, resolved, subfilter,
 total, resolved_fraction)`.
 
 `name` is the stem DALES appends `r`, `s` and `t` to — `"wthl"`, `"wqt"`, `"wthv"`, `"wql"`.
-The fraction is the resolved share of the total where the total is non-negligible, and zero
+The fraction is the resolved share of the total where the total is above `floor`, and zero
 elsewhere.
 
 Near the surface the subfilter part carries the flux and the fraction tends to zero; through
 the mixed layer the resolved eddies take over.
 """
-function flux_partition(name::AbstractString, date; root = data_root(), floor = 1.0e-12)
-    part(suffix) = read_variable(name * suffix, date; root, translate_units = false)
+flux_partition(
+    name::AbstractString, date;
+    root = data_root(), floor::Real = FLUX_FRACTION_FLOOR,
+) = open_archive(:profiles, date; root) do ds
+    flux_partition(name, ds; floor)
+end
+
+function flux_partition(
+    name::AbstractString, ds::NC.NCDataset; floor::Real = FLUX_FRACTION_FLOOR,
+)
+    part(suffix) = read_variable(ds, name * suffix; translate_units = false)
     resolved = part("r")
-    subfilter = part("s").data
-    total = part("t").data
+    return flux_partition(;
+        resolved.z, resolved.time, resolved = resolved.data,
+        subfilter = part("s").data, total = part("t").data, floor = nonmissingtype(eltype(part("t").data))(floor),
+    )
+end
+
+function flux_partition(;
+    z::AbstractVector,
+    time::AbstractVector,
+    resolved::AbstractArray,
+    subfilter::AbstractArray,
+    total::AbstractArray,
+    floor::Real = nonmissingtype(eltype(total))(FLUX_FRACTION_FLOOR), 
+)
+    FT = nonmissingtype(eltype(total))
     # broadcast rather than comprehend, so the (level, time) shape survives
     meaningful = abs.(total) .> floor
-    safe = ifelse.(meaningful, total, one(eltype(total)))
-    fraction = ifelse.(meaningful, resolved.data ./ safe, zero(eltype(total)))
-    return (;
-        resolved.z, resolved.time, resolved = resolved.data, subfilter, total,
-        resolved_fraction = fraction,
-    )
+    safe = ifelse.(meaningful, total, one(FT))
+    fraction = ifelse.(meaningful, resolved ./ safe, zero(FT))
+    return (; z, time, resolved, subfilter, total, resolved_fraction = fraction)
 end
 
 """
@@ -150,18 +191,36 @@ true subfilter energy rather than the whole of it.
 `u2r` and `v2r` sit on `zt` and `w2r`/`w2s` on `zm`, so the vertical component is
 interpolated onto the full levels before the sum.
 """
-function turbulence_kinetic_energy(date; root = data_root())
-    raw(name) = read_variable(name, date; root, translate_units = false)
-    u2, v2 = raw("u2r"), raw("v2r")
-    w2r, w2s = raw("w2r"), raw("w2s")
+turbulence_kinetic_energy(date; root = data_root()) =
+    open_archive(:profiles, date; root) do ds
+        turbulence_kinetic_energy(ds)
+    end
+
+function turbulence_kinetic_energy(ds::NC.NCDataset)
+    raw(name) = read_variable(ds, name; translate_units = false)
+    u2 = raw("u2r")
+    return turbulence_kinetic_energy(;
+        u2.z, u2.time, u2 = u2.data, v2 = raw("v2r").data,
+        w2r = raw("w2r").data, w2s = raw("w2s").data,
+    )
+end
+
+function turbulence_kinetic_energy(;
+    z::AbstractVector,
+    time::AbstractVector,
+    u2::AbstractArray,
+    v2::AbstractArray,
+    w2r::AbstractArray,
+    w2s::AbstractArray,
+)
     # the vertical variances live on the half levels; average adjacent faces onto zt
     onto_centres(a) = (a[1:(end - 1), :] .+ a[2:end, :]) ./ 2
-    nz = size(u2.data, 1)
-    w2r_c = vcat(onto_centres(w2r.data), w2r.data[end:end, :])[1:nz, :]
-    w2s_c = vcat(onto_centres(w2s.data), w2s.data[end:end, :])[1:nz, :]
-    resolved = (u2.data .+ v2.data .+ w2r_c) ./ 2
+    nz = size(u2, 1)
+    w2r_c = vcat(onto_centres(w2r), w2r[end:end, :])[1:nz, :]
+    w2s_c = vcat(onto_centres(w2s), w2s[end:end, :])[1:nz, :]
+    resolved = (u2 .+ v2 .+ w2r_c) ./ 2
     subfilter = w2s_c ./ 2
-    return (; u2.z, u2.time, resolved, subfilter, total = resolved .+ subfilter)
+    return (; z, time, resolved, subfilter, total = resolved .+ subfilter)
 end
 
 # --- Radiation and water ------------------------------------------------------ #
@@ -181,18 +240,29 @@ down onto the top of the atmosphere.
 `SW_dn_TOA` is stored negative, and both shortwave fields are zero through the polar night.
 `net_shortwave` is their sum, which is the convention that makes it the absorbed flux.
 """
-function toa_radiation(date; root = data_root())
-    raw(name) = read_variable(name, date; root, file = :tmser, translate_units = false)
+toa_radiation(date; root = data_root()) =
+    open_archive(:tmser, date; root) do ds
+        toa_radiation(ds)
+    end
+
+function toa_radiation(ds::NC.NCDataset)
+    raw(name) = read_variable(ds, name; file = :tmser, translate_units = false)
     up = raw("SW_up_TOA")
-    down = raw("SW_dn_TOA").data
-    return (;
-        up.time,
-        shortwave_up = up.data,
-        shortwave_down = down,
-        longwave_up = raw("LW_up_TOA").data,
-        net_shortwave = up.data .+ down,
+    return toa_radiation(;
+        up.time, shortwave_up = up.data,
+        shortwave_down = raw("SW_dn_TOA").data, longwave_up = raw("LW_up_TOA").data,
     )
 end
+
+toa_radiation(;
+    time::AbstractVector,
+    shortwave_up::AbstractVector,
+    shortwave_down::AbstractVector,
+    longwave_up::AbstractVector,
+) = (;
+    time, shortwave_up, shortwave_down, longwave_up,
+    net_shortwave = shortwave_up .+ shortwave_down,
+)
 
 """
     water_paths(date; root)
@@ -204,17 +274,34 @@ rain, cloud_ice, snow, graupel, liquid, ice)`.
 `total` is the archive's own `lwp_bar`, which is not their sum — it is the liquid path alone,
 under a name that predates the ice species.
 """
-function water_paths(date; root = data_root())
-    raw(name) = read_variable(name, date; root, file = :tmser, translate_units = false).data
-    cloud_liquid, rain = raw("clwp_bar"), raw("rlwp_bar")
-    cloud_ice, snow, graupel = raw("icwp_bar"), raw("siwp_bar"), raw("giwp_bar")
-    time = read_variable("lwp_bar", date; root, file = :tmser,
-                         translate_units = false).time
-    return (;
-        time, total = raw("lwp_bar"), cloud_liquid, rain, cloud_ice, snow, graupel,
-        liquid = cloud_liquid .+ rain, ice = cloud_ice .+ snow .+ graupel,
+water_paths(date; root = data_root()) =
+    open_archive(:tmser, date; root) do ds
+        water_paths(ds)
+    end
+
+function water_paths(ds::NC.NCDataset)
+    raw(name) = read_variable(ds, name; file = :tmser, translate_units = false)
+    total = raw("lwp_bar")
+    return water_paths(;
+        total.time, total = total.data,
+        cloud_liquid = raw("clwp_bar").data, rain = raw("rlwp_bar").data,
+        cloud_ice = raw("icwp_bar").data, snow = raw("siwp_bar").data,
+        graupel = raw("giwp_bar").data,
     )
 end
+
+water_paths(;
+    time::AbstractVector,
+    total::AbstractVector,
+    cloud_liquid::AbstractVector,
+    rain::AbstractVector,
+    cloud_ice::AbstractVector,
+    snow::AbstractVector,
+    graupel::AbstractVector,
+) = (;
+    time, total, cloud_liquid, rain, cloud_ice, snow, graupel,
+    liquid = cloud_liquid .+ rain, ice = cloud_ice .+ snow .+ graupel,
+)
 
 """
     surface_precipitation(date; root)
@@ -224,12 +311,25 @@ Surface precipitation of a day, as `(; time, total, liquid, ice)`.
 `tmser.001.nc`'s `sfc_prec_av` is the total and `sfc_precw_av` the liquid part, so the ice
 part is their difference.
 """
-function surface_precipitation(date; root = data_root())
-    raw(name) = read_variable(name, date; root, file = :tmser, translate_units = false)
+surface_precipitation(date; root = data_root()) =
+    open_archive(:tmser, date; root) do ds
+        surface_precipitation(ds)
+    end
+
+function surface_precipitation(ds::NC.NCDataset)
+    raw(name) = read_variable(ds, name; file = :tmser, translate_units = false)
     total = raw("sfc_prec_av")
-    liquid = raw("sfc_precw_av").data
-    return (; total.time, total = total.data, liquid, ice = total.data .- liquid)
+    return surface_precipitation(;
+        total.time, total = total.data, liquid = raw("sfc_precw_av").data,
+    )
 end
+
+surface_precipitation(;
+    time::AbstractVector, total::AbstractVector, liquid::AbstractVector,
+) = (; time, total, liquid, ice = total .- liquid)
+
+"""Condensate at or below this is too little to partition, and the liquid fraction is zero."""
+const CONDENSATE_FLOOR = 1.0f-12
 
 """
     phase_partition(date; root, floor)
@@ -238,19 +338,37 @@ The realized liquid fraction of the condensate, `q_liq/(q_liq + q_ice)`, as
 `(; z, time, liquid_fraction, q_liquid, q_ice)`.
 
 `q_liq` is `profiles.001.nc`'s `ql`, which under SB3 is the **cloud** liquid, and `q_ice` is
-`sv008`. The fraction is zero where there is no condensate rather than undefined.
+`sv008`. The fraction is zero where the condensate is at or below `floor` rather than
+undefined.
 
 This is what the run produced; [`liquid_fraction`](@ref) is the temperature ramp the scheme
 would impose, and the two are not the same thing.
 """
-function phase_partition(date; root = data_root(), floor = 1.0e-12)
-    raw(name) = read_variable(name, date; root, file = :profiles, translate_units = false)
+phase_partition(date; root = data_root(), floor::Real = CONDENSATE_FLOOR) =
+    open_archive(:profiles, date; root) do ds
+        phase_partition(ds; floor)
+    end
+
+function phase_partition(ds::NC.NCDataset; floor::Real = CONDENSATE_FLOOR)
+    raw(name) = read_variable(ds, name; file = :profiles, translate_units = false)
     q_liquid = raw("ql")
-    q_ice = raw("sv008").data
-    condensate = q_liquid.data .+ q_ice
+    return phase_partition(;
+        q_liquid.z, q_liquid.time, q_liquid = q_liquid.data,
+        q_ice = raw("sv008").data, floor = nonmissingtype(eltype(q_liquid.data))(floor),
+    )
+end
+
+function phase_partition(;
+    z::AbstractVector,
+    time::AbstractVector,
+    q_liquid::AbstractArray,
+    q_ice::AbstractArray,
+    floor::Real = nonmissingtype(eltype(q_liquid))(CONDENSATE_FLOOR), 
+)
+    FT = nonmissingtype(eltype(q_liquid))
+    condensate = q_liquid .+ q_ice
     present = condensate .> floor
-    safe = ifelse.(present, condensate, one(eltype(condensate)))
-    fraction = ifelse.(present, q_liquid.data ./ safe, zero(eltype(condensate)))
-    return (; q_liquid.z, q_liquid.time, liquid_fraction = fraction,
-            q_liquid = q_liquid.data, q_ice)
+    safe = ifelse.(present, condensate, one(FT))
+    fraction = ifelse.(present, q_liquid ./ safe, zero(FT))
+    return (; z, time, liquid_fraction = fraction, q_liquid, q_ice)
 end

@@ -700,6 +700,21 @@ _archive_path(::Val{:samptend}, date, root) = samptend_path(date; root)
 _archive_path(::Val{:tmser}, date, root) = tmser_path(date; root)
 
 """
+    open_archive(f, file, date; root)
+
+Run `f(ds)` on `file` of `date` — `:profiles`, `:tmser`, `:mphys`, `:samptend` or `:scm_in`
+— opened once and closed after, returning whatever `f` returns.
+
+Several variables of one day cost one open through the [`read_variable`](@ref) method that
+takes an open dataset, against one open each through the method that takes a date.
+"""
+function open_archive(f, file::Symbol, date; root = data_root())
+    path = _archive_path(Val(file), date, root)
+    isfile(path) || error("No archive file at $path")
+    return NC.NCDataset(f, path, "r")
+end
+
+"""
     variable_product(raw)
 
 Which archive file a raw variable lives in.
@@ -769,7 +784,6 @@ Reads the variable's attributes, not its data.
 function ρ_power(
     ds::NC.NCDataset, raw::AbstractString; file::Symbol = variable_product(raw),
 )::Int
-    haskey(ds, raw) || error("`$raw` is not in $(NC.path(ds))")
     var = ds[raw]
     return last(
         dales_variable_attributes(
@@ -816,12 +830,10 @@ function read_variable(
     file::Symbol = variable_product(raw),
     translate_units::Bool = true,
 )
-    path = _archive_path(Val(file), date, root)
-    isfile(path) || error("No archive file at $path")
-    return NC.NCDataset(path, "r") do ds
+    return open_archive(file, date; root) do ds
         density =
             translate_units && ρ_power(ds, raw; file) != 0 ?
-            dales_slab_column(date; root).rhof : nothing
+            dales_rhof(date; root).rhof : nothing
         read_variable(ds, raw; file, translate_units, density)
     end
 end
@@ -842,7 +854,6 @@ function read_variable(
     translate_units::Bool = true,
     density = nothing,
 )
-    haskey(ds, raw) || error("`$raw` is not in $(NC.path(ds))")
     var = ds[raw]
     data = _read_oriented(ds, raw)
     description = physical_name(raw, file)
@@ -854,7 +865,7 @@ function read_variable(
         if translate_units
             isnothing(density) && error(
                 "`$raw` is a number per unit mass; converting it needs the day's `rhof`. \
-                 Pass `density = dales_slab_column(date; root).rhof`, or read it with \
+                 Pass `density = dales_rhof(date; root).rhof`, or read it with \
                  `translate_units = false`.",
             )
             data = data .* density .^ power
@@ -892,20 +903,46 @@ absent.
 This is the quantity a radiation scheme is judged on, `thltend` being the sum of the
 two bands and `thlradls` a prescribed large-scale term that is separate from both.
 """
-function dales_radiative_heating(date; root = data_root(), band::Symbol = :total, backend = DefaultThermodynamicsBackend())
-    raw = get(
+dales_radiative_heating(
+    date;
+    root = data_root(),
+    band::Symbol = :total,
+    backend = DefaultThermodynamicsBackend(),
+) = open_archive(:profiles, date; root) do ds
+    dales_radiative_heating(ds; band, backend)
+end
+
+function dales_radiative_heating(
+    ds::NC.NCDataset;
+    band::Symbol = :total,
+    backend = DefaultThermodynamicsBackend(),
+)
+    name = get(
         Dict(:longwave => "thllwtend", :shortwave => "thlswtend", :total => "thltend"),
         band,
     ) do
         error("No radiative heating for `$band`; try :longwave, :shortwave or :total")
     end
-    f = read_variable(raw, date; root, translate_units = false)
-    presh = read_variable("presh", date; root, translate_units = false)
-    rhof = read_variable("rhof", date; root, translate_units = false)
-    zt = read_variable("zt", date; root, translate_units = false)
-    zm = read_variable("zm", date; root, translate_units = false)
-    p = pressure_from_face(presh.data, rhof.data, zt.data, zm.data; backend)
-    return (; f.z, f.time, data = f.data .* exner.(backend, p), units = "K s^-1")
+    raw(v) = read_variable(ds, v; translate_units = false)
+    f = raw(name)
+    return dales_radiative_heating(;
+        f.z, f.time, tendency = f.data, presh = raw("presh").data,
+        rhof = raw("rhof").data, zt = raw("zt").data, zm = raw("zm").data, backend,
+    )
+end
+
+function dales_radiative_heating(;
+    z::AbstractVector,
+    time::AbstractVector,
+    tendency::AbstractArray,
+    presh::AbstractArray,
+    rhof::AbstractArray,
+    zt::AbstractArray,
+    zm::AbstractArray,
+    backend = DefaultThermodynamicsBackend(),
+)
+    p = pressure_from_face(presh, rhof, zt, zm; backend)
+    return (; z, time, data = tendency .* exner.(backend, p), units = "K s^-1")
 end
 
 """
@@ -936,11 +973,17 @@ function dales_fall_speed(
         error("No fall speed for `$species`; try :ice, :snow, :rain or :graupel")
     rate = read_variable(raw_rate[species], date; root, translate_units = false)
     q = read_variable(raw_mass[species], date; root, translate_units = false).data
-    return (;
-        rate.z, rate.time,
-        data = ifelse.(q .> q_min, rate.data ./ q, NaN),
-        units = "m s^-1",
-    )
+    return dales_fall_speed(; rate.z, rate.time, rate = rate.data, q, q_min)
+end
+
+function dales_fall_speed(;
+    z::AbstractVector,
+    time::AbstractVector,
+    rate::AbstractArray,
+    q::AbstractArray,
+    q_min::Real = 1.0e-8,
+)
+    return (; z, time, data = ifelse.(q .> q_min, rate ./ q, NaN), units = "m s^-1")
 end
 
 """
@@ -954,14 +997,14 @@ face, so the energy fluxes are `ρ c_p wθ_l` and `ρ L_v wq_t`. DALES computes 
 itself at `isurf = 2`; `scm_in`'s `sfc_*_flx` are netCDF fill and are not them.
 """
 function surface_heat_fluxes(date; root = data_root())
-    ρ = read_variable("rhof", date; root, translate_units = false).data[1, :]
-    wθ = read_variable("wthls", date; root, translate_units = false)
-    wq = read_variable("wqts", date; root, translate_units = false).data[1, :]
-    return (;
-        wθ.time,
-        hfss = ρ .* DALES_CONSTANTS.cp_d .* wθ.data[1, :],
-        hfls = ρ .* DALES_CONSTANTS.L_v .* wq,
-    )
+    return open_archive(:profiles, date; root) do ds
+        surface_heat_fluxes(ds)
+    end
+end
+
+function surface_heat_fluxes(ds::NC.NCDataset)
+    f = surface_fluxes(ds; resolved = false)
+    return (; f.time, f.hfss, f.hfls)
 end
 
 """

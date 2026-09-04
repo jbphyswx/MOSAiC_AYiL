@@ -131,8 +131,9 @@ reproducing the archive.
 using ClimaAtmos
 using MOSAiCAYiL
 c = MOSAiCAYiL.case("20200503")
-forcing = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(Float64, c)
-setup = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(Float64, c)
+fd = MOSAiCAYiL.testbed_forcing(c)                     # read scm_in once, share it
+forcing = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(Float64, c; forcing = fd)
+setup = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(Float64, c; forcing_data = fd)
 grid = MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(Float64)  # z = faces, an IntervalMesh, or a grid
 ```
 
