@@ -186,48 +186,6 @@ function face_above_center(z, faces::AbstractVector = LES_FACES)
     return faces[k]
 end
 
-"""
-    truncate_faces_to_top(faces, z_top)
-
-`faces` cut at `z_top`: every face below it, then `z_top` itself as the new top
-face. `nothing` leaves the column alone.
-"""
-function truncate_faces_to_top(faces::AbstractVector, z_top)
-    isnothing(z_top) && return faces
-    top = convert(eltype(faces), z_top)
-    top > first(faces) || error(
-        "A domain top of $top m is not above the surface face $(first(faces)) m.",
-    )
-    kept = filter(<(top), faces)
-    push!(kept, top)
-    length(kept) >= 2 ||
-        error("A domain top of $top m leaves no cells above $(first(faces)) m.")
-    return kept
-end
-
-"""
-    coarsen_faces_to_dz_min(faces, dz_min)
-
-`faces` with interior faces dropped so every cell is at least `dz_min` thick,
-keeping the bottom and top.
-"""
-function coarsen_faces_to_dz_min(faces::AbstractVector, dz_min)
-    length(faces) >= 2 || error("A grid needs at least two faces, got $(length(faces))")
-    isnothing(dz_min) && return faces
-    minimum(diff(faces)) >= dz_min && return faces
-    kept = [first(faces)]
-    for f in faces[2:(end - 1)]
-        (f - last(kept)) >= dz_min && push!(kept, f)
-    end
-    (last(faces) - last(kept)) >= dz_min ? push!(kept, last(faces)) :
-    (kept[end] = last(faces))
-    length(kept) >= 2 || error(
-        "dz_min = $dz_min m leaves no cells in a column of depth \
-         $(last(faces) - first(faces)) m.",
-    )
-    return kept
-end
-
 """Native DALES faces of a case — the same [`LES_FACES`](@ref) on every day."""
 native_faces(::MOSAiCAYiLCase) = LES_FACES
 

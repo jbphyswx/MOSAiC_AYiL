@@ -114,7 +114,7 @@ reading one horizontal level and reading one column want opposite shapes.
 ## The grid and the physics
 
 Every day ran on the same 287 faces. [`LES_FACES`](src/grid.jl) is the file's own `Float32`
-values; `truncate_faces_to_top` and `coarsen_faces_to_dz_min` compose to cut or thin them.
+values.
 
 ![The DALES vertical grid](docs/src/assets/vertical_grid.png)
 
@@ -133,7 +133,7 @@ using MOSAiCAYiL
 c = MOSAiCAYiL.case("20200503")
 forcing = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLForcing(Float64, c)
 setup = MOSAiCAYiL.ClimaAtmosMOSAiCAYiLSetup(Float64, c)
-grid = MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(Float64)  # LES faces; compose truncate/coarsen first
+grid = MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(Float64)  # z = faces, an IntervalMesh, or a grid
 ```
 
 Default initial density is `scm_in_air_density`. Pass

@@ -362,36 +362,54 @@ end
 # --- Grid ------------------------------------------------------------------- #
 
 """
-    ClimaAtmos_MOSAiCAYiL_grid(FT; faces = LES_FACES, kwargs...)
+    ClimaAtmos_MOSAiCAYiL_grid(FT; z = LES_FACES, kwargs...)
 
-A ClimaAtmos `ColumnGrid` from a face vector. The faces *are* the specification:
-compose [`MOSAiCAYiL.truncate_faces_to_top`](@ref) and
-[`MOSAiCAYiL.coarsen_faces_to_dz_min`](@ref) before passing `faces`. There is no
-parallel `z_top` / `dz_min` keyword, and no per-day grid.
+A ClimaAtmos `ColumnGrid` for the vertical specification `z`: a vector of cell faces
+[m], a ClimaCore `IntervalMesh`, or a grid, which is returned unchanged. `kwargs` reach
+`ClimaAtmos.ColumnGrid`. The default is the grid DALES ran on; any other column is the
+caller's to build.
 """
-function MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(
+MOSAiCAYiL.ClimaAtmos_MOSAiCAYiL_grid(
     ::Type{FT};
-    faces::AbstractVector = MOSAiCAYiL.LES_FACES,
+    z = MOSAiCAYiL.LES_FACES,
     kwargs...,
-) where {FT <: AbstractFloat}
+) where {FT <: AbstractFloat} = _column_grid(FT, z; kwargs...)
+
+function _column_grid(::Type{FT}, faces::AbstractVector; kwargs...) where {FT}
     zf = collect(FT, faces)
+    length(zf) >= 2 || error("A column needs at least two faces, got $(length(zf)).")
     issorted(zf) || error(
         "Cell faces must be increasing; got $(length(zf)) faces spanning \
          $(extrema(zf)) m.",
     )
+    allunique(zf) || error("Cell faces must be distinct; $(length(zf)) faces given.")
     domain = CC.Domains.IntervalDomain(
         CC.Geometry.ZPoint(first(zf)),
         CC.Geometry.ZPoint(last(zf));
         boundary_names = (:bottom, :top),
     )
-    z_mesh = CC.Meshes.IntervalMesh(domain, CC.Geometry.ZPoint.(zf))
-    return ClimaAtmos.ColumnGrid(
+    return _column_grid(
+        FT, CC.Meshes.IntervalMesh(domain, CC.Geometry.ZPoint.(zf)); kwargs...,
+    )
+end
+
+_column_grid(::Type{FT}, mesh::CC.Meshes.IntervalMesh; kwargs...) where {FT} =
+    ClimaAtmos.ColumnGrid(
         FT;
-        z_elem = length(zf) - 1,
-        z_max = last(zf),
-        z_mesh,
+        z_elem = CC.Meshes.nelements(mesh),
+        z_max = CC.Geometry.component(CC.Meshes.domain(mesh).coord_max, 1),
+        z_mesh = mesh,
         kwargs...,
     )
+
+function _column_grid(::Type{FT}, grid::CC.Grids.AbstractGrid; kwargs...) where {FT}
+    isempty(kwargs) || error(
+        "`z` is already a grid, so $(join(keys(kwargs), ", ")) cannot be applied to it.",
+    )
+    built = CC.Spaces.undertype(ClimaAtmos.get_spaces(grid).center_space)
+    built === FT ||
+        error("`z` is a $built grid; asking for $FT would not change it.")
+    return grid
 end
 
 """Centre-level heights [m] of `grid`, ascending."""

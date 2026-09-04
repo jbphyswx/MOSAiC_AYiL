@@ -18,7 +18,28 @@ FT = Float64
 params  = MA.ClimaAtmos_MOSAiCAYiL_params(FT, c)
 forcing = MA.ClimaAtmosMOSAiCAYiLForcing(FT, c)
 setup   = MA.ClimaAtmosMOSAiCAYiLSetup(FT, c)
-grid    = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50))
+grid    = MA.ClimaAtmos_MOSAiCAYiL_grid(FT)
+```
+
+## The grid
+
+`z` is the vertical specification: a vector of cell faces [m], a ClimaCore `IntervalMesh`, or
+a grid, which is returned unchanged. It defaults to the DALES column, and any other column is
+yours to build — with ClimaCore's own stretching, or by hand:
+
+```julia
+MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = range(0, 4000; length = 41))
+
+mesh = ClimaAtmos.CC.Meshes.IntervalMesh(
+    ClimaAtmos.CC.Domains.IntervalDomain(
+        ClimaAtmos.CC.Geometry.ZPoint(0.0),
+        ClimaAtmos.CC.Geometry.ZPoint(4000.0);
+        boundary_names = (:bottom, :top),
+    ),
+    ClimaAtmos.CC.Meshes.GeneralizedExponentialStretching(50.0, 500.0);
+    nelems = 40,
+)
+MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = mesh)
 ```
 
 ## Parameters

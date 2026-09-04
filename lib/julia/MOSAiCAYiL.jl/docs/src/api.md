@@ -307,8 +307,6 @@ STRETCH
 stretch_dz
 stretch_centres
 stretch_faces
-truncate_faces_to_top
-coarsen_faces_to_dz_min
 face_above_center
 native_faces
 z_max

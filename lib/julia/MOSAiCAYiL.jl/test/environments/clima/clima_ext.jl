@@ -39,8 +39,8 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
             nudging = (; timescale = 10800.0, ramp_depth = 300.0, z_min = 500.0),
         )
 
-        faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
-        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; faces)
+        faces = collect(FT, range(0, MA.LES_TOP_FACE; length = 120))
+        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = faces)
         sp = ClimaAtmos.get_spaces(grid)
         coords = ClimaAtmos.CC.Fields.coordinate_field(sp.center_space)
         Y = (; c = map(_ -> (; ρ = FT(1)), coords))
@@ -55,11 +55,69 @@ Test.@testset "MOSAiCAYiLClimaAtmosExt (ClimaAtmos $(MA.climaatmos_pkg_version()
         )
     end
 
+    Test.@testset "the grid takes faces, a mesh or a grid" begin
+        faces = collect(FT, range(0, MA.LES_TOP_FACE; length = 120))
+        from_faces = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = faces)
+        centres = MA.ClimaAtmos_MOSAiCAYiL_z(from_faces)
+        Test.@test length(centres) == length(faces) - 1
+
+        mesh = ClimaAtmos.CC.Meshes.IntervalMesh(
+            ClimaAtmos.CC.Domains.IntervalDomain(
+                ClimaAtmos.CC.Geometry.ZPoint(first(faces)),
+                ClimaAtmos.CC.Geometry.ZPoint(last(faces));
+                boundary_names = (:bottom, :top),
+            ),
+            ClimaAtmos.CC.Geometry.ZPoint.(faces),
+        )
+        Test.@test MA.ClimaAtmos_MOSAiCAYiL_z(
+            MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = mesh),
+        ) == centres
+
+        # a grid is handed back, not rebuilt
+        Test.@test MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = from_faces) === from_faces
+
+        Test.@test length(
+            MA.ClimaAtmos_MOSAiCAYiL_z(MA.ClimaAtmos_MOSAiCAYiL_grid(FT)),
+        ) == length(MA.LES_FACES) - 1
+
+        # a stretched mesh needs nothing from this package
+        stretched = ClimaAtmos.CC.Meshes.IntervalMesh(
+            ClimaAtmos.CC.Domains.IntervalDomain(
+                ClimaAtmos.CC.Geometry.ZPoint(FT(0)),
+                ClimaAtmos.CC.Geometry.ZPoint(FT(4000));
+                boundary_names = (:bottom, :top),
+            ),
+            ClimaAtmos.CC.Meshes.GeneralizedExponentialStretching(FT(50), FT(500));
+            nelems = 40,
+        )
+        stretched_z = MA.ClimaAtmos_MOSAiCAYiL_z(
+            MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = stretched),
+        )
+        Test.@test length(stretched_z) == 40
+        Test.@test issorted(stretched_z)
+        Test.@test first(diff(stretched_z)) < last(diff(stretched_z))
+
+        Test.@test_throws ErrorException MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = faces[1:1])
+        Test.@test_throws ErrorException MA.ClimaAtmos_MOSAiCAYiL_grid(
+            FT; z = reverse(faces),
+        )
+        Test.@test_throws ErrorException MA.ClimaAtmos_MOSAiCAYiL_grid(
+            FT; z = [faces[1]; faces],
+        )
+        # nothing is silently dropped on the pass-through
+        Test.@test_throws ErrorException MA.ClimaAtmos_MOSAiCAYiL_grid(
+            FT; z = from_faces, z_max = FT(1000),
+        )
+        Test.@test_throws ErrorException MA.ClimaAtmos_MOSAiCAYiL_grid(
+            Float32; z = from_faces,
+        )
+    end
+
     Test.@testset "setup condensate split" for date in ("20200503", "20200219")
         day = MA.case(date)
         forcing_data = MA.testbed_forcing(day)
-        faces = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
-        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; faces)
+        faces = collect(FT, range(0, MA.LES_TOP_FACE; length = 120))
+        grid = MA.ClimaAtmos_MOSAiCAYiL_grid(FT; z = faces)
         z = MA.ClimaAtmos_MOSAiCAYiL_z(grid)
         params = MA.ClimaAtmos_MOSAiCAYiL_params(FT, day)
         setup = MA.ClimaAtmosMOSAiCAYiLSetup(FT, day; forcing_data)

@@ -32,26 +32,10 @@ The horizontal grid is 6.4 km at 20 m, 320 × 320:
 MA.PRODUCTION_GRID
 ```
 
-## Cutting and thinning
+## Running on another column
 
-A column for a model is built by composing two functions on the face vector:
-
-```@example grid
-faces = MA.truncate_faces_to_top(MA.LES_FACES, 2500)
-length(faces), last(faces)
-```
-
-```@example grid
-coarse = MA.coarsen_faces_to_dz_min(MA.LES_FACES, 50)
-length(coarse), minimum(diff(coarse))
-```
-
-They compose, and the faces are the whole specification — there is no parallel `z_top` or
-`dz_min` keyword elsewhere:
-
-```@example grid
-short = MA.coarsen_faces_to_dz_min(MA.truncate_faces_to_top(MA.LES_FACES, 2500), 50)
-length(short), first(short), last(short)
+[`MOSAiCAYiL.LES_FACES`](@ref) is the grid DALES ran on, and it is the only grid this package
+owns. Feel free to provide your own grid
 ```
 
 [`MOSAiCAYiL.face_above_center`](@ref) snaps a height up to the face at or above it, which is

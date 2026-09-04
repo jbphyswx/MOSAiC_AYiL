@@ -53,10 +53,11 @@ parameter at that day's drift position.
 function ClimaAtmos_MOSAiCAYiL_scm_coriolis end
 
 """
-    ClimaAtmos_MOSAiCAYiL_grid(FT; faces = LES_FACES, kwargs...)
+    ClimaAtmos_MOSAiCAYiL_grid(FT; z = LES_FACES, kwargs...)
 
-A ClimaAtmos `ColumnGrid` from a face vector. The faces are the whole specification —
-compose [`truncate_faces_to_top`](@ref) and [`coarsen_faces_to_dz_min`](@ref) first.
+A ClimaAtmos `ColumnGrid` for the vertical specification `z`: a vector of cell faces [m],
+a ClimaCore `IntervalMesh`, or a grid, which is returned unchanged. `kwargs` reach
+`ClimaAtmos.ColumnGrid`.
 """
 function ClimaAtmos_MOSAiCAYiL_grid end
 
