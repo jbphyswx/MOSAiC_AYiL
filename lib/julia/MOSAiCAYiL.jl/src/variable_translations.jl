@@ -1010,7 +1010,10 @@ end
 """
     column_water_path(q, ρ, faces)
 
-`∫ ρ q dz` [kg m^-2] for each time.
+`∫ ρ q dz` [kg m^-2].
+
+`q` and `ρ` are one column as `AbstractVector`s, giving a scalar, or `(level, time)`
+`AbstractMatrix`es, giving one value per time. `faces` are the `nz + 1` cell faces [m].
 
 A water path is a *derived* quantity on both sides of a comparison, never a stored
 one: the reference's own bars were integrated by DALES over its 286 levels with
@@ -1018,11 +1021,46 @@ its `ρ` and `Δz`, a model's `lwp` over the model's levels, so
 differencing them mixes a physical difference with an integration one. Build both
 with this, from profiles on one grid.
 """
-function column_water_path(q::AbstractMatrix, ρ::AbstractMatrix, faces::AbstractVector)
-    nz = size(q, 1)
+function column_water_path(q::AbstractVector, ρ::AbstractVector, faces::AbstractVector)
+    length(ρ) == length(q) ||
+        error("Got $(length(q)) mixing ratios for $(length(ρ)) densities.")
+    _check_faces(faces, length(q))
+    return _column_integral(q, ρ, faces)
+end
+
+column_water_path(q::AbstractMatrix, ρ::AbstractMatrix, faces::AbstractVector) =
+    column_water_path!(
+        similar(q, promote_type(eltype(q), eltype(ρ), eltype(faces)), size(q, 2)),
+        q, ρ, faces,
+    )
+
+"""
+    column_water_path!(out, q, ρ, faces)
+
+[`column_water_path`](@ref) for a `(level, time)` `q` and `ρ`, written into `out`, one
+value per time. Allocates nothing.
+"""
+function column_water_path!(
+    out::AbstractVector, q::AbstractMatrix, ρ::AbstractMatrix, faces::AbstractVector,
+)
+    size(ρ) == size(q) ||
+        error("Got $(size(q)) mixing ratios and $(size(ρ)) densities.")
+    length(out) == size(q, 2) ||
+        error("Got $(length(out)) slots for $(size(q, 2)) times.")
+    _check_faces(faces, size(q, 1))
+    for t in axes(q, 2)
+        out[t] = _column_integral(view(q, :, t), view(ρ, :, t), faces)
+    end
+    return out
+end
+
+function _check_faces(faces::AbstractVector, nz::Integer)
     length(faces) == nz + 1 || error(
         "A column of $nz cells needs $(nz + 1) faces, got $(length(faces)).",
     )
-    dz = diff(faces)
-    return [sum(q[k, t] * ρ[k, t] * dz[k] for k in 1:nz) for t in axes(q, 2)]
+    return nothing
 end
+
+# the cell depth is formed per level rather than as a `diff`, which would allocate
+_column_integral(q, ρ, faces) =
+    sum(q[k] * ρ[k] * (faces[k + 1] - faces[k]) for k in eachindex(q))

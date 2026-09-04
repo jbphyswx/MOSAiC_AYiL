@@ -70,6 +70,7 @@ dales_radiative_heating
 dales_fall_speed
 surface_heat_fluxes
 column_water_path
+column_water_path!
 ```
 
 ### The naming and unit tables
