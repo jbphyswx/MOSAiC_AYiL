@@ -51,6 +51,7 @@ open_archive
 ρ_power
 variable_product
 physical_name
+raw_name
 dales_variable_attributes
 spelled_units
 mphys_name

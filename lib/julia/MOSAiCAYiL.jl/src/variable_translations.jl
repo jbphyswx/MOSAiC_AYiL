@@ -583,6 +583,49 @@ function physical_name(raw::AbstractString, file::Symbol)
     return String(raw)
 end
 
+"""
+    raw_name(physical, date; root, file)
+    raw_name(physical, ds; file)
+
+The archive variable name that [`physical_name`](@ref) maps onto `physical`, the inverse
+of that translation for one file.
+
+Inverts `physical_name` over the file's own variables rather than reimplementing the
+mapping, so the two cannot drift apart. Errors when nothing matches, and errors naming
+every candidate when more than one does: `profiles.001.nc` carries `q_rain` as both
+`sv002` and `qrmn`, and `n_rain` as both `sv001` and `nrrain` — the scalar output and
+`BULKMICROSTAT3` writing one quantity on two different time axes.
+"""
+function raw_name(
+    physical::AbstractString, date; root = data_root(), file::Symbol = :profiles,
+)
+    return open_archive(file, date; root) do ds
+        raw_name(physical, ds; file)
+    end
+end
+
+function raw_name(
+    physical::AbstractString, ds::NC.NCDataset; file::Symbol = :profiles,
+)
+    hits = String[]
+    for raw in keys(ds)
+        got = try
+            physical_name(raw, file)
+        catch
+            continue
+        end
+        got == physical && push!(hits, String(raw))
+    end
+    isempty(hits) && error(
+        "No variable of $(NC.path(ds)) has the physical name `$physical`.",
+    )
+    length(hits) == 1 || error(
+        "`$physical` is the physical name of $(join(sort(hits), ", ")) in \
+         $(NC.path(ds)); ask for the one you want by its archive name.",
+    )
+    return only(hits)
+end
+
 # --- Units ------------------------------------------------------------------ #
 
 """

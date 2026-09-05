@@ -11,6 +11,10 @@ does not store.
 The slab-mean column of one AYiL day, as
 `(; z, time, ps, presh, presf, exner, rhof, θ, θ_l, θ_v, T, q_tot, q_liq, u, v)`.
 
+A *slab* is one horizontal x–y layer of the LES domain at a given height — DALES's own
+term, from the `slabsum` reduction in `modmpi.f90` — so every field here is a horizontal
+mean over the full domain at each level, not a single grid column.
+
 `z` is `zt` [m] and `time` [s]; every other field is `(length(z), length(time))`.
 `FT` defaults to the archive's own `Float32`.
 
