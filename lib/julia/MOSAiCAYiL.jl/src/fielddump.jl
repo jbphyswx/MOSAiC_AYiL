@@ -179,13 +179,24 @@ function _axis_offsets(sizes::AbstractVector{Int})
 end
 
 """
-    open_fielddump(source; expnr = "001")
+    open_fielddump(source; expnr = "001", rename = Dict{String,String}())
 
 A fielddump as `(; vars, coords, dims, units, tiles)` **without reading any field data**.
 
 `vars` maps canonical name to a [`FielddumpVariable`](@ref), which is an `AbstractArray`:
 index it and only the tiles the request touches are read. `coords` and `units` are metadata
 and are read eagerly, being small.
+
+`rename` maps a name onto another, applied after [`fielddump_physical_name`](@ref), for a
+file whose fields are not named as this archive names them. Only `vars`, `dims` and `units`
+are keyed by the result; `FielddumpVariable.raw` stays the name in the file. A rename onto
+a name already present errors rather than shadowing it.
+
+```julia
+MOSAiCAYiL.open_fielddump(path; rename = Dict("q_l" => "ql")) do fd
+    fd.vars["ql"]
+end
+```
 
 Use this when a day is larger than you want in memory — a decomposed day is gigabytes per
 variable. [`load_fielddump`](@ref) is the same thing materialized.
@@ -200,18 +211,34 @@ MOSAiCAYiL.open_fielddump("runs/20200720") do fd
 end
 ```
 """
-function open_fielddump(source::AbstractString; expnr::AbstractString = "001")
+function open_fielddump(
+    source::AbstractString;
+    expnr::AbstractString = "001",
+    rename::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+)
     handles = FielddumpHandles()
     tiles, coords, var_dims, var_units, var_types, nx, ny =
         isdir(source) ? _fielddump_layout_tiles(source, expnr, handles) :
         isfile(source) ? _fielddump_layout_file(source, handles) :
         (close(handles); error("No fielddump directory or file at $source"))
 
+    # resolve every name before building anything, so a collision is caught whichever order
+    # the variables happen to come in
+    canonical = Dict(raw => fielddump_physical_name(raw) for raw in keys(var_dims))
+    final = Dict(raw => get(rename, name, name) for (raw, name) in canonical)
+    for (raw, name) in final
+        clashes = [r for (r, n) in final if n == name && r != raw]
+        isempty(clashes) || (close(handles); error(
+            "`$name` would name $(join(sort([raw; clashes]), " and ")) in $source; \
+             `rename` may not send a variable onto one that is already there.",
+        ))
+    end
+
     vars = Dict{String, FielddumpVariable}()
     dims = Dict{String, Tuple}()
     units = Dict{String, String}()
     for (raw, d) in var_dims
-        name = fielddump_physical_name(raw)
+        name = final[raw]
         xaxis = something(findfirst(x -> x in ("xt", "xm"), collect(d)), 0)
         yaxis = something(findfirst(x -> x in ("yt", "ym"), collect(d)), 0)
         sz = ntuple(length(d)) do k
@@ -249,13 +276,14 @@ Close the tile files [`open_fielddump`](@ref) opened. Indexing `fd` afterwards e
 close_fielddump(fd) = close(fd.handles)
 
 """
-    load_fielddump(source; expnr, vars, time_indices)
+    load_fielddump(source; expnr, rename, vars, time_indices)
 
 The 3D fields of one simulation as `(; dims, coords, fields, units)`.
 
 `source` is either a directory of `fielddump` tiles, which are stitched onto the global
 grid, or a single file, which is read as it stands. `vars` selects variables by their
 **canonical** name ([`fielddump_physical_name`](@ref)); `nothing` reads them all.
+`rename` is [`open_fielddump`](@ref)'s, and applies before `vars` selects.
 
 `fields` maps canonical name to an array whose axes are named in `dims[name]`, so a
 staggered wind keeps its own axis (`xm`, `ym`, `zm`) rather than being collocated.
@@ -267,10 +295,11 @@ to indexing instead.
 function load_fielddump(
     source::AbstractString;
     expnr::AbstractString = "001",
+    rename::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     vars = nothing,
     time_indices = Colon(),
 )
-    return open_fielddump(source; expnr) do fd
+    return open_fielddump(source; expnr, rename) do fd
         fields = Dict{String, Array}()
         for (name, v) in fd.vars
             (vars === nothing || name in vars || v.raw in vars) || continue

@@ -108,33 +108,29 @@ end
 
 testbed_forcing(c::MOSAiCAYiLCase; kwargs...) = testbed_forcing(date_string(c); kwargs...)
 
-"""Linear in height, extrapolating past either end, as `modtestbed.f90:1096-1102` does."""
-function _at_height(z_src::AbstractVector, v_src::AbstractVector, z)
-    n = length(z_src)
-    n >= 2 || error("Interpolating needs at least two source levels; got $n.")
-    k = clamp(searchsortedlast(z_src, z), 1, n - 1)
-    f = (z - z_src[k]) / (z_src[k + 1] - z_src[k])
-    return v_src[k] + f * (v_src[k + 1] - v_src[k])
-end
-
 """
-    interpolate_forcing(forcing, z)
+    interpolate_forcing(forcing, z; bc)
 
 A day's forcing on the heights `z`, by the scheme DALES used to put it on the LES grid:
 linear in height, level by level (`modtestbed.f90:1082-1121`).
 
-`z` may run below the ERA5 column's lowest level (2 m) or above its top, and the result is
-the linear extrapolation of the two nearest levels there, which is what DALES's own
-unclamped `fac` gives. For the boundary condition at the ground use
-[`surface_state`](@ref) instead: the skin is a surface, not the air continued downward.
+`z` may run below the ERA5 column's lowest level (2 m) or above its top. The default
+[`ExtrapolateBoundaryCondition`](@ref) continues the two nearest levels linearly there,
+which is what DALES's own unclamped `fac` gives; pass another
+[`AbstractBoundaryCondition`](@ref) to choose differently. For the boundary condition at
+the ground use [`surface_state`](@ref) instead: the skin is a surface, not the air
+continued downward.
 
 Pressure is interpolated with everything else. DALES discards it and rebuilds its column
 hydrostatically from `ps` ([`pressure_fromztop`](@ref)); do that if you need a column in
 hydrostatic balance with its own temperature.
 """
-function interpolate_forcing(forcing, z::AbstractVector)
+function interpolate_forcing(
+    forcing, z::AbstractVector;
+    bc::AbstractBoundaryCondition = ExtrapolateBoundaryCondition(),
+)
     issorted(forcing.z) || error("The forcing's heights must be ascending.")
-    on(field) = [_at_height(forcing.z, field, zk) for zk in z]
+    on(field) = interpolate_1d(z, forcing.z, field; bc)
     return (;
         z = collect(z),
         ta = on(forcing.ta),

@@ -37,7 +37,11 @@ function Base.getindex(v::DerivedFielddumpVariable{T, N}, I::Vararg{Any, N}) whe
         k -> k == v.zaxis ? length(levels) : k == v.taxis ? length(times) : 1, N,
     )
     spread = map(v.columns) do column
-        reshape([column[k, t] for k in levels, t in times], shape)
+        # emit the block in the variable's own axis order: `reshape` preserves linear
+        # order, so a level-major block would land transposed when time comes first
+        block = v.zaxis < v.taxis ? [column[k, t] for k in levels, t in times] :
+                [column[k, t] for t in times, k in levels]
+        reshape(block, shape)
     end
     out = v.f.(spread..., sliced...)
     all(i -> i isa Integer, I) && return out[1]
@@ -65,21 +69,21 @@ function _fielddump_axes(dims::Tuple)
     taxis = findfirst(==("time"), collect(dims))
     isnothing(zaxis) && error("A fielddump variable on $dims has no level axis.")
     isnothing(taxis) && error("A fielddump variable on $dims has no time axis.")
-    zaxis < taxis || error(
-        "The level axis must precede the time axis; got $dims.",
-    )
     return zaxis, taxis
 end
 
-function _match_values(wanted, available, what)
-    return map(wanted) do value
-        k = findfirst(==(Float64(value)), Float64.(available))
-        isnothing(k) && error(
-            "The fielddump's $what $value is not in the column, which has \
-             $(first(available)) … $(last(available)).",
-        )
-        k
-    end
+# A column field on the fielddump's own `(level, time)` grid: interpolate along the levels,
+# then along the records. `bc` decides what happens off either end of either axis.
+function _column_onto(field, z_col, t_col, z_want, t_want, bc)
+    by_level = reduce(
+        hcat,
+        interpolate_1d(z_want, z_col, view(field, :, j); bc) for j in axes(field, 2)
+    )
+    return reduce(
+        vcat,
+        permutedims(interpolate_1d(t_want, t_col, view(by_level, k, :); bc))
+        for k in axes(by_level, 1)
+    )
 end
 
 """
@@ -97,13 +101,27 @@ and no ice, which is how `rhof` is formed. It is **not** the anelastic `rhobf` �
 [`anelastic_base_density`](@ref). Both are [`DerivedFielddumpVariable`](@ref)s and read nothing
 until indexed.
 
-`column` is a [`dales_slab_column`](@ref) of the same run. Each fielddump level and time is
-matched to the column record with the same value, and an unmatched one errors.
+`column` is a [`dales_slab_column`](@ref) of the same run, whose `presf` and `exner` are
+interpolated linearly onto the fielddump's own levels and times — first along the levels,
+then along the records. The two grids need not agree, and a `Float32` column against
+`Float64` coordinates is fine.
+
+`bc` says what happens where the fielddump runs off either end of the column. The default
+[`ErrorBoundaryCondition`](@ref) refuses, naming the value and the range the column covers.
+The published `profiles.001.nc` stops at [`PUBLISHED_RUNTIME_S`](@ref) while a paper-length
+run reaches [`PAPER_RUNTIME_S`](@ref), so a fielddump from the latter is off the end of the
+former: read that run's own profiles with `dales_slab_column(date; root)`, or pass
+[`ExtrapolateBoundaryCondition`](@ref) or [`ConstantBoundaryCondition`](@ref) to say what
+to do instead.
 
 Where a run wrote `pressure`, `exner` or `temperature` of its own they stay in `fd.vars`
 untouched; this function always derives, so the two never shadow each other.
 """
-function fielddump_thermodynamics(fd, column; backend = DefaultThermodynamicsBackend())
+function fielddump_thermodynamics(
+    fd, column;
+    backend = DefaultThermodynamicsBackend(),
+    bc::AbstractBoundaryCondition = ErrorBoundaryCondition(),
+)
     for name in ("thl", "qt", "ql")
         haskey(fd.vars, name) ||
             error("`fielddump_thermodynamics` needs `$name`, which $(fd.source) lacks.")
@@ -114,10 +132,8 @@ function fielddump_thermodynamics(fd, column; backend = DefaultThermodynamicsBac
 
     z = fd.coords[dims[zaxis]]
     time = fd.coords["time"]
-    levels = _match_values(z, column.z, "level")
-    records = _match_values(time, column.time, "time")
-    pressure = column.presf[levels, records]
-    Π = column.exner[levels, records]
+    pressure = _column_onto(column.presf, column.z, column.time, z, time, bc)
+    Π = _column_onto(column.exner, column.z, column.time, z, time, bc)
 
     FT = promote_type(eltype(pressure), eltype(θ_l))
     L_over_cp = L_v0(backend, FT) / cp_d(backend, FT)

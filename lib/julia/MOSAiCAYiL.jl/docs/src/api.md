@@ -281,6 +281,18 @@ forcing_with_surface
 interpolate_forcing
 ```
 
+## Interpolation
+
+```@docs
+interpolate_1d
+Linear1DInterpolant
+AbstractBoundaryCondition
+ErrorBoundaryCondition
+ExtrapolateBoundaryCondition
+NearestBoundaryCondition
+ConstantBoundaryCondition
+```
+
 ## The surface layer
 
 ```@docs

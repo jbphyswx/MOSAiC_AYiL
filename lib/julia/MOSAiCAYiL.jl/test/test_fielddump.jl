@@ -122,3 +122,37 @@ Test.@testset "a single global file is one tile" begin
         end
     end
 end
+
+Test.@testset "a caller rename map keys the variables differently" begin
+    mktempdir() do dir
+        f = write_fielddump_tiles(dir)
+        # `sv001` is already renamed to `n_rain` by `fielddump_physical_name`; the map
+        # applies after that, so it is the canonical name that is remapped
+        rename = Dict("ql" => "q_liquid", "n_rain" => "number_rain")
+        MA.open_fielddump(dir; rename) do fd
+            Test.@test sort(collect(keys(fd.vars))) ==
+                       ["number_rain", "q_liquid", "qt", "thl", "v", "w"]
+            # the data is the same variable, and `raw` still names the netCDF field
+            Test.@test fd.vars["q_liquid"][:, :, :, :] == f.expected["ql"]
+            Test.@test fd.vars["q_liquid"].raw == "ql"
+            Test.@test fd.vars["number_rain"].raw == "sv001"
+            # dims and units follow the new key
+            Test.@test fd.dims["q_liquid"] == ("xt", "yt", "zt", "time")
+            Test.@test haskey(fd.units, "q_liquid")
+        end
+        # an empty map is the identity
+        MA.open_fielddump(dir; rename = Dict{String, String}()) do fd
+            Test.@test sort(collect(keys(fd.vars))) ==
+                       ["n_rain", "ql", "qt", "thl", "v", "w"]
+        end
+        # renaming onto a name the file already carries is refused rather than shadowing it
+        Test.@test_throws ErrorException MA.open_fielddump(
+            dir; rename = Dict("qt" => "ql"),
+        ) do fd
+        end
+        # `load_fielddump` honours it too, and selects on the renamed key
+        loaded = MA.load_fielddump(dir; rename = Dict("ql" => "q_liquid"), vars = ["q_liquid"])
+        Test.@test collect(keys(loaded.fields)) == ["q_liquid"]
+        Test.@test loaded.fields["q_liquid"] == f.expected["ql"]
+    end
+end

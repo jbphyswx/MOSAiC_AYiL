@@ -1,13 +1,16 @@
 using NCDatasets: NCDatasets as NC
 
 """
-    write_fielddump_tiles(dir; nx, ny_per_tile, n_tiles, nz, nt, expnr)
+    write_fielddump_tiles(dir; nx, ny_per_tile, n_tiles, nz, nt, expnr, time_first)
 
 A y-decomposed set of `fielddump.III.JJJ.NNN.nc` tiles under `dir`, as DALES writes them,
-returning the global field of each variable.
+returning the global field of each variable in the order the file stores it.
 
 Values are distinct at every global point, so a stitch that misplaces a tile cannot agree
 with the expected field. `u`, `v` and `w` sit on `xm`, `ym` and `zm`.
+
+`time_first` reverses every variable's axes to `(time, z, y, x)`, which is what an
+assembled global file carries and what `_fielddump_axes` sees as `taxis < zaxis`.
 """
 function write_fielddump_tiles(
     dir::AbstractString;
@@ -17,8 +20,11 @@ function write_fielddump_tiles(
     nz::Int = 3,
     nt::Int = 2,
     expnr::AbstractString = "001",
+    time_first::Bool = false,
 )
     ny = ny_per_tile * n_tiles
+    order(dims) = time_first ? reverse(dims) : dims
+    orient(a) = time_first ? permutedims(a, (4, 3, 2, 1)) : a
     point(v, i, j, k, t) = Float32(v * 1.0f6 + i * 1.0f4 + j * 1.0f2 + k * 1.0f0 + t * 0.1f0)
     # `point` packs a point's own coordinates into its value, so a misplaced tile cannot
     # match. The trailing factor scales that encoding into the variable's real range: the
@@ -32,7 +38,9 @@ function write_fielddump_tiles(
         ("ql", ("xt", "yt", "zt", "time"), "1e-5kg/kg", 6, 1.0f-10),
     )
     expected = Dict(
-        name => [point(v, i, j, k, t) * s for i in 1:nx, j in 1:ny, k in 1:nz, t in 1:nt]
+        name => orient(
+            [point(v, i, j, k, t) * s for i in 1:nx, j in 1:ny, k in 1:nz, t in 1:nt],
+        )
         for (name, _, _, v, s) in layout
     )
 
@@ -57,7 +65,7 @@ function write_fielddump_tiles(
             end
             for (name, dims, units, v, s) in layout
                 a = [point(v, i, j, k, t) * s for i in 1:nx, j in js, k in 1:nz, t in 1:nt]
-                NC.defVar(ds, name, a, dims; attrib = ["units" => units])
+                NC.defVar(ds, name, orient(a), order(dims); attrib = ["units" => units])
             end
         end
     end

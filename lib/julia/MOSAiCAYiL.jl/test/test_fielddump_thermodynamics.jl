@@ -73,17 +73,51 @@ Test.@testset "a derived variable indexes like an Array" begin
     end
 end
 
-Test.@testset "an unmatched level or time errors" begin
+Test.@testset "a column that does not cover the fielddump" begin
     mktempdir() do dir
         f = write_fielddump_tiles(dir)
         MA.open_fielddump(dir) do fd
             good = fixture_column(f; nz = f.nz, nt = f.nt)
-            # a column whose times do not include the fielddump's
+            # shifting either axis up leaves the fielddump's last level/time off the end
             shifted = (; good.z, time = good.time .+ 1.0, good.presf, good.exner)
-            Test.@test_throws ErrorException MA.fielddump_thermodynamics(fd, shifted)
-            # and one whose levels do not
             lifted = (; z = good.z .+ 1.0, good.time, good.presf, good.exner)
-            Test.@test_throws ErrorException MA.fielddump_thermodynamics(fd, lifted)
+            for column in (shifted, lifted)
+                Test.@test_throws ErrorException MA.fielddump_thermodynamics(fd, column)
+                # naming what to do about it is the point of the boundary condition
+                out = MA.fielddump_thermodynamics(
+                    fd, column; bc = MA.ExtrapolateBoundaryCondition(),
+                )
+                Test.@test all(isfinite, out.pressure)
+                Test.@test size(out.pressure) == (f.nz, f.nt)
+            end
+        end
+    end
+end
+
+Test.@testset "the column is interpolated onto the fielddump, not matched to it" begin
+    mktempdir() do dir
+        f = write_fielddump_tiles(dir)
+        MA.open_fielddump(dir) do fd
+            exact = fixture_column(f; nz = f.nz, nt = f.nt)
+            reference = MA.fielddump_thermodynamics(fd, exact)
+
+            # a column on twice as many levels, spanning the same range: interpolating it
+            # back onto the fielddump's levels must return what the exact column gave
+            b = MA.DefaultThermodynamicsBackend()
+            fine_z = collect(range(first(exact.z), last(exact.z); length = 2 * f.nz - 1))
+            fine_p = [1.0e5 - 12.0 * zk + 100.0 * t for zk in fine_z, t in 1:(f.nt)]
+            fine = (; z = fine_z, exact.time, presf = fine_p, exner = MA.exner.(b, fine_p))
+            got = MA.fielddump_thermodynamics(fd, fine)
+            Test.@test got.pressure ≈ reference.pressure
+            Test.@test got.exner ≈ reference.exner
+
+            # a Float32 column against Float64 coordinates, which exact matching could not do
+            cheap = (;
+                z = Float32.(exact.z), time = Float32.(exact.time),
+                presf = Float32.(exact.presf), exner = Float32.(exact.exner),
+            )
+            Test.@test MA.fielddump_thermodynamics(fd, cheap).pressure ≈
+                       reference.pressure rtol = 1.0e-6
         end
     end
 end
@@ -101,6 +135,43 @@ Test.@testset "it derives rather than shadowing what a run wrote" begin
                        ["n_rain", "ql", "qt", "thl", "v", "w"]
             Test.@test th.temperature isa MA.DerivedFielddumpVariable
             Test.@test th.density isa MA.DerivedFielddumpVariable
+        end
+    end
+end
+
+Test.@testset "the level axis may follow the time axis" begin
+    # an assembled global file carries (time, zt, yt, xt); `reshape` preserves linear order,
+    # so a level-major column block would land transposed. nz == nt is the one shape where
+    # that transpose has the right element count and would corrupt silently.
+    for (nz, nt) in ((3, 2), (3, 3))
+        mktempdir() do dir
+            forward = joinpath(dir, "fwd")
+            reversed = joinpath(dir, "rev")
+            mkpath(forward)
+            mkpath(reversed)
+            f = write_fielddump_tiles(forward; nz, nt)
+            r = write_fielddump_tiles(reversed; nz, nt, time_first = true)
+            column = fixture_column(f; nz, nt)
+
+            MA.open_fielddump(forward) do fwd
+                MA.open_fielddump(reversed) do rev
+                    Test.@test MA.fielddump_thermodynamics isa Function
+                    a = MA.fielddump_thermodynamics(fwd, column)
+                    b = MA.fielddump_thermodynamics(rev, column)
+
+                    Test.@test fwd.dims["thl"] == ("xt", "yt", "zt", "time")
+                    Test.@test rev.dims["thl"] == ("time", "zt", "yt", "xt")
+                    Test.@test size(a.temperature) == (f.nx, f.ny, nz, nt)
+                    Test.@test size(b.temperature) == (nt, nz, r.ny, r.nx)
+
+                    # the same physical field, written along opposite axes
+                    Test.@test a.temperature[:, :, :, :] ≈
+                               permutedims(b.temperature[:, :, :, :], (4, 3, 2, 1))
+                    Test.@test a.density[:, :, :, :] ≈
+                               permutedims(b.density[:, :, :, :], (4, 3, 2, 1))
+                    Test.@test a.pressure == b.pressure
+                end
+            end
         end
     end
 end

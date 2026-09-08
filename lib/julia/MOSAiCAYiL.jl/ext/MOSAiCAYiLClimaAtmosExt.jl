@@ -14,7 +14,6 @@ using MOSAiCAYiL: MOSAiCAYiL
 const CC = ClimaAtmos.CC
 const TD = ClimaAtmos.TD
 const Insolation = ClimaAtmos.Insolation
-const Intp = ClimaAtmos.Intp
 const lazy = ClimaAtmos.lazy
 const CP = ClimaAtmos.CP
 
@@ -22,9 +21,8 @@ MOSAiCAYiL.climaatmos_pkg_version() = Base.pkgversion(ClimaAtmos)
 
 # Linear in height, flat outside the data — the interpolation `ColumnProfiles` and
 # `interp_vertical_prof` use, as a scalar callable of `z`.
-_column_profile(z, values) = Intp.extrapolate(
-    Intp.interpolate((z,), values, Intp.Gridded(Intp.Linear())),
-    Intp.Flat(),
+_column_profile(z, values) = MOSAiCAYiL.Linear1DInterpolant(
+    z, values; bc = MOSAiCAYiL.NearestBoundaryCondition(),
 )
 
 # --- Parameters ------------------------------------------------------------- #

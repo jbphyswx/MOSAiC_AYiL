@@ -23,6 +23,7 @@ include("cases.jl")
 using .Cases
 
 include("dales.jl")
+include("interpolation.jl")
 include("constants.jl")
 include("configuration.jl")
 include("lacz_gamma.jl")
