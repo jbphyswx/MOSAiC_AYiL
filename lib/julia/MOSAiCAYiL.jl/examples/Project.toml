@@ -1,4 +1,5 @@
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 MOSAiCAYiL = "7147eef5-9ac3-41de-95f6-4171e6dd1b45"
 
 [sources]

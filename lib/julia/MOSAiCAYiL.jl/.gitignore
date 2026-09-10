@@ -30,6 +30,7 @@ Manifest*.toml
 *.nc
 *.mp4
 *.png
+*.pdf
 *.hdf5
 *.h5
 *.g
@@ -42,6 +43,9 @@ Manifest*.toml
 
 # the docs figures are checked in; the README and index.md link to them
 !docs/src/assets/*.png
+
+# example plot output (png is ignored above; pdf is not)
+examples/plot_all_dates/figures/
 
 
 # misc
